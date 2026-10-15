@@ -1,0 +1,237 @@
+{
+    "version": 1,
+    "plugins": [
+        {
+            "id": "markdown",
+            "name": "Markdown 节点",
+            "version": "1.1.0",
+            "description": "在画布中编辑与渲染 Markdown",
+            "icon": "📝",
+            "entry": "markdown.js"
+        },
+        {
+            "id": "svg",
+            "name": "SVG 节点",
+            "version": "1.1.0",
+            "description": "透明背景渲染 SVG,可接收上游文本节点的 SVG 源码",
+            "icon": "🔷",
+            "entry": "svg.js"
+        },
+        {
+            "id": "html",
+            "name": "HTML 节点",
+            "version": "1.2.0",
+            "description": "沙箱 iframe 渲染 HTML,支持 {{input}} 注入上游文本",
+            "icon": "🌐",
+            "entry": "html.js"
+        },
+        {
+            "id": "panorama",
+            "name": "3D 全景节点",
+            "version": "1.1.0",
+            "description": "查看 360° 等距柱状全景图,可从上游图片节点取图",
+            "icon": "🧭",
+            "entry": "panorama.js"
+        },
+        {
+            "id": "sticky-note",
+            "name": "便利贴节点",
+            "version": "1.1.0",
+            "description": "可自选颜色、双击编辑、拖动即可移动的便利贴",
+            "icon": "📌",
+            "entry": "sticky-note.js"
+        },
+        {
+            "id": "code-block",
+            "name": "代码块节点",
+            "version": "1.0.0",
+            "description": "等宽展示与编辑代码,行号显示 + 一键复制,可接收上游文本",
+            "icon": "🧩",
+            "entry": "code-block.js"
+        },
+        {
+            "id": "table",
+            "name": "表格节点",
+            "version": "1.0.0",
+            "description": "画布内直接编辑的表格,支持增删行列,可输出 CSV",
+            "icon": "📋",
+            "entry": "table.js"
+        },
+        {
+            "id": "web-embed",
+            "name": "网页嵌入节点",
+            "version": "1.0.0",
+            "description": "在画布中嵌入网页(iframe),可从上游文本节点读取网址",
+            "icon": "🖥",
+            "entry": "web-embed.js"
+        },
+        {
+            "id": "json-viewer",
+            "name": "JSON 查看器",
+            "version": "1.0.0",
+            "description": "格式化展示 JSON,错误提示 + 一键复制,可接收上游文本",
+            "icon": "🧾",
+            "entry": "json-viewer.js"
+        },
+        {
+            "id": "countdown",
+            "name": "倒计时节点",
+            "version": "1.0.0",
+            "description": "画布倒计时器:预设时长、暂停/继续/加时,走时钟低频刷新",
+            "icon": "⏱",
+            "entry": "countdown.js"
+        },
+        {
+            "id": "todo-list",
+            "name": "待办清单节点",
+            "version": "1.0.0",
+            "description": "勾选式待办清单:回车添加、点击完成、一键清除已完成项",
+            "icon": "✅",
+            "entry": "todo-list.js"
+        },
+        {
+            "id": "storyboard",
+            "name": "分镜表节点",
+            "version": "1.0.0",
+            "description": "影视/TVC 分镜表:镜头号·景别·画面·台词·时长·提示词,一键复制全部提示词",
+            "icon": "🎬",
+            "entry": "storyboard.js"
+        },
+        {
+            "id": "shot-card",
+            "name": "镜头提示词卡",
+            "version": "1.0.0",
+            "description": "单镜头提示词组装:中文描述+风格芯片,一键 AI 转写为英文生成提示词",
+            "icon": "🎥",
+            "entry": "shot-card.js"
+        },
+        {
+            "id": "aspect-frame",
+            "name": "画幅预览节点",
+            "version": "1.0.0",
+            "description": "按画幅显示安全框(动作区/字幕区),规划横屏/竖屏/宽银幕多版本",
+            "icon": "🖼",
+            "entry": "aspect-frame.js"
+        },
+        {
+            "id": "mood-palette",
+            "name": "色彩氛围卡",
+            "version": "1.0.0",
+            "description": "给场景定色板(5 色)+ 氛围说明,统一美术与生图色调",
+            "icon": "🎨",
+            "entry": "mood-palette.js"
+        },
+        {
+            "id": "line-card",
+            "name": "台词卡",
+            "version": "1.0.0",
+            "description": "角色台词卡:台词 + 表演提示,一键复制完整台词本",
+            "icon": "💬",
+            "entry": "line-card.js"
+        },
+        {
+            "id": "director-styles",
+            "name": "导演风格库",
+            "version": "1.0.0",
+            "description": "24 位导演视觉风格档案:点选即得英文风格提示词,可拼进生图/生视频提示词",
+            "icon": "🎬",
+            "entry": "director-styles.js"
+        },
+        {
+            "id": "script-studio",
+            "name": "剧本工坊",
+            "version": "1.0.0",
+            "description": "AI 剧本创作:创意 brief + 成片形式 → 分场剧本,支持多风格改写与复制",
+            "icon": "📜",
+            "entry": "script-studio.js"
+        },
+        {
+            "id": "prompt-template",
+            "name": "提示词模板库",
+            "version": "1.0.0",
+            "description": "把常用提示词存成 {{变量}} 模板,填空复用一键复制",
+            "icon": "🏷",
+            "entry": "prompt-template.js"
+        },
+        {
+            "id": "color-grade",
+            "name": "调色风格卡",
+            "version": "1.0.0",
+            "description": "12 种专业调色预设:色板 + 英文调色提示词,统一整片色调",
+            "icon": "🌈",
+            "entry": "color-grade.js"
+        },
+        {
+            "id": "negative-preset",
+            "name": "负面词预设",
+            "version": "1.0.0",
+            "description": "常用负面提示词分组勾选,组合一键复制(画质/畸形/水印/视频专用等)",
+            "icon": "🚫",
+            "entry": "negative-preset.js"
+        },
+        {
+            "id": "camera-moves",
+            "name": "运镜词典",
+            "version": "1.0.0",
+            "description": "20 种专业运镜:说明 + 英文运镜提示词,可直接拼进视频生成提示词",
+            "icon": "🎥",
+            "entry": "camera-moves.js"
+        },
+        {
+            "id": "emotion-guide",
+            "name": "表演情绪库",
+            "version": "1.0.0",
+            "description": "20 种人物表演情绪:表演要点 + 英文表情肢体提示词",
+            "icon": "🎭",
+            "entry": "emotion-guide.js"
+        },
+        {
+            "id": "lighting-setups",
+            "name": "布光方案库",
+            "version": "1.0.0",
+            "description": "16 种经典布光方案:图解说明 + 英文布光提示词",
+            "icon": "💡",
+            "entry": "lighting-setups.js"
+        },
+        {
+            "id": "composition-guide",
+            "name": "构图指南",
+            "version": "1.0.0",
+            "description": "8 种经典构图的叠加示意:三分法/黄金分割/对角线/螺旋等,附英文构图提示词",
+            "icon": "📐",
+            "entry": "composition-guide.js"
+        },
+        {
+            "id": "style-eras",
+            "name": "美术风格库",
+            "version": "1.0.0",
+            "description": "20 种美术方向与年代风格:关键元素 + 英文风格提示词",
+            "icon": "🏛",
+            "entry": "style-eras.js"
+        },
+        {
+            "id": "material-texture",
+            "name": "材质质感库",
+            "version": "1.0.0",
+            "description": "30 种材质质感关键词:分类检索 + 英文材质提示词",
+            "icon": "🧱",
+            "entry": "material-texture.js"
+        },
+        {
+            "id": "color-wheels",
+            "name": "色彩和谐生成器",
+            "version": "1.0.0",
+            "description": "按色彩理论实时计算和谐配色:互补/类似/三角/分裂互补/四角/单色阶",
+            "icon": "🌈",
+            "entry": "color-wheels.js"
+        },
+        {
+            "id": "video-prompt-builder",
+            "name": "视频提示词构建器",
+            "version": "1.0.0",
+            "description": "结构化组装视频生成提示词:首帧/动作/运镜/镜头/氛围/时长,一键复制",
+            "icon": "🎞",
+            "entry": "video-prompt-builder.js"
+        }
+    ]
+}
