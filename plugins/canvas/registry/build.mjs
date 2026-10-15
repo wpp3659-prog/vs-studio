@@ -100,7 +100,7 @@ const manifest = {
 await writeFile(join(outDir, "official-plugins.json"), JSON.stringify(manifest, null, 4) + "\n");
 // jsDelivr 对同一 URL 的 purge 有时不生效(边缘缓存顽固)。
 // 额外把清单写入 v2/ 子目录:新路径 = 全新缓存键,遇到清单缓存陈旧时改用该路径即可。
-// 对策:再次遇到清单不更新时,把这里的 "v2" 递增为 "v3" 并同步更新前端默认地址。
-await mkdir(join(outDir, "v2"), { recursive: true });
-await writeFile(join(outDir, "v2", "official-plugins.json"), JSON.stringify(manifest, null, 4) + "\n");
+// 对策:再次遇到清单不更新时,把这里的 "v3" 递增为 "v4" 并同步更新前端默认地址。
+await mkdir(join(outDir, "v3"), { recursive: true });
+await writeFile(join(outDir, "v3", "official-plugins.json"), JSON.stringify(manifest, null, 4) + "\n");
 console.log(`wrote official-plugins.json (${OFFICIAL.length} plugins) → dist/ 与 dist/v2/`);

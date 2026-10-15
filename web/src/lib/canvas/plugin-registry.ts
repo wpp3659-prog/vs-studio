@@ -16,7 +16,7 @@ type RawManifest = { plugins?: RawEntry[] };
 // Fetch the official registry and resolve relative entries against its URL for the existing URL installation flow.
 // 多源容错:jsDelivr 对分支名有最长 12h 的快照缓存,新推内容可能暂时 404/陈旧;
 // 主源失败时自动降级到 GitHub raw 镜像(实时),保证清单始终可拉到。
-const REGISTRY_FALLBACK_URL = "https://ghfast.top/https://raw.githubusercontent.com/wpp3659-prog/vs-studio/plugins-dist/v2/official-plugins.json";
+const REGISTRY_FALLBACK_URL = "https://ghfast.top/https://raw.githubusercontent.com/wpp3659-prog/vs-studio/plugins-dist/v3/official-plugins.json";
 
 async function fetchManifest(url: string): Promise<RawManifest> {
     const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
