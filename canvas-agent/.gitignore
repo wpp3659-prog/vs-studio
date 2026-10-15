@@ -1,2 +1,5 @@
 dist
 node_modules
+
+# npm 登录凭据（authToken）存在这里，绝不提交
+.npmrc
