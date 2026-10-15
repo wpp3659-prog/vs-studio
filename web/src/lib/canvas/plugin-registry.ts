@@ -14,13 +14,27 @@ type RawEntry = { id?: string; name?: string; version?: string; description?: st
 type RawManifest = { plugins?: RawEntry[] };
 
 // Fetch the official registry and resolve relative entries against its URL for the existing URL installation flow.
+// 多源容错:jsDelivr 对分支名有最长 12h 的快照缓存,新推内容可能暂时 404/陈旧;
+// 主源失败时自动降级到 GitHub raw 镜像(实时),保证清单始终可拉到。
+const REGISTRY_FALLBACK_URL = "https://ghfast.top/https://raw.githubusercontent.com/wpp3659-prog/vs-studio/plugins-dist/v2/official-plugins.json";
+
+async function fetchManifest(url: string): Promise<RawManifest> {
+    const response = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return (await response.json()) as RawManifest;
+}
+
 export async function fetchOfficialPlugins(registryUrl: string = PLUGIN_REGISTRY_URL): Promise<OfficialPluginEntry[]> {
-    // no-store:绕过浏览器 HTTP 缓存。jsDelivr 对文件下发 7 天强缓存,
-    // 远端清单更新后普通刷新可能仍命中旧副本,导致插件面板显示旧列表。
-    const response = await fetch(registryUrl, { headers: { accept: "application/json" }, cache: "no-store" });
-    if (!response.ok) throw new Error(i18n.t("canvas.pluginErrors.registryFailed", { status: response.status }));
-    const data = (await response.json()) as RawManifest;
-    const list = Array.isArray(data?.plugins) ? data.plugins : [];
+    // 记录实际成功的源:bundle 相对地址必须按它解析,否则主源 404 时 bundle 也会跟着 404
+    let sourceUrl = registryUrl;
+    let manifest: RawManifest;
+    try {
+        manifest = await fetchManifest(registryUrl);
+    } catch {
+        sourceUrl = REGISTRY_FALLBACK_URL;
+        manifest = await fetchManifest(REGISTRY_FALLBACK_URL);
+    }
+    const list = Array.isArray(manifest?.plugins) ? manifest.plugins : [];
     return list
         .filter((item): item is RawEntry & { id: string } => Boolean(item && item.id && (item.entry || item.url)))
         .map((item) => ({
@@ -29,7 +43,7 @@ export async function fetchOfficialPlugins(registryUrl: string = PLUGIN_REGISTRY
             version: item.version || "0.0.0",
             description: item.description,
             icon: item.icon,
-            url: item.url ? item.url : new URL(item.entry as string, registryUrl).toString(),
+            url: item.url ? item.url : new URL(item.entry as string, sourceUrl).toString(),
         }));
 }
 
