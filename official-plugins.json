@@ -296,6 +296,70 @@
             "description": "粘贴广告描述,AI 按专业框架拆解:钩子/结构节奏/视听手法/文案亮点/可偷师清单",
             "icon": "🔍",
             "entry": "ad-teardown.js"
+        },
+        {
+            "id": "character-bible",
+            "name": "角色圣经",
+            "version": "1.0.0",
+            "description": "固定角色身份锚点、外观、服装与表演细节，生成跨镜头一致性设定和英文提示词",
+            "icon": "🧑‍🎤",
+            "entry": "character-bible.js"
+        },
+        {
+            "id": "scene-bible",
+            "name": "场景圣经",
+            "version": "1.0.0",
+            "description": "锁定地点空间关系、视觉锚点、固定陈设和主光方向，辅助跨镜头场景一致",
+            "icon": "🏠",
+            "entry": "scene-bible.js"
+        },
+        {
+            "id": "lens-guide",
+            "name": "焦段镜头指南",
+            "version": "1.0.0",
+            "description": "18 组广角/标准/人像/长焦/变形宽银幕焦段参考，解释透视效果与适用景别，附英文镜头提示",
+            "icon": "🔭",
+            "entry": "lens-guide.js"
+        },
+        {
+            "id": "blocking-board",
+            "name": "场面调度俯视板",
+            "version": "1.0.0",
+            "description": "在俯视平面图安排演员与机位，标记 180 度关系轴与机位侧，减少正反打方向错误",
+            "icon": "🗺",
+            "entry": "blocking-board.js"
+        },
+        {
+            "id": "coverage-planner",
+            "name": "镜头覆盖规划器",
+            "version": "1.0.0",
+            "description": "把一场戏规划为主镜头/双人/正反打/单人/反应/插入与剪辑保险镜头，并检查轴线与视线",
+            "icon": "🎬",
+            "entry": "coverage-planner.js"
+        },
+        {
+            "id": "continuity-checker",
+            "name": "连戏连续性检查",
+            "version": "1.0.0",
+            "description": "检查分镜之间的轴线、视线、动作、服装、道具、场景与光线连续性，引用证据并区分风险与待确认项",
+            "icon": "🧷",
+            "entry": "continuity-checker.js"
+        },
+        {
+            "id": "edit-rhythm",
+            "name": "剪辑节奏规划器",
+            "version": "1.0.0",
+            "description": "按目标时长生成精确时间码剪辑节奏表：画面、转场、旁白、音乐音效与品牌落点",
+            "icon": "⏱",
+            "entry": "edit-rhythm.js"
+        },
+        {
+            "id": "delivery-qc",
+            "name": "成片交付检查表",
+            "version": "1.0.0",
+            "description": "24 项可勾选的影视/TVC 交付复核清单，含叙事品牌、画面连续性、声音、字幕合规与文件导出",
+            "icon": "✅",
+            "entry": "delivery-qc.js"
         }
     ]
 }

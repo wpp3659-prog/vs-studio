@@ -7,7 +7,7 @@
             "version": "1.1.0",
             "description": "在画布中编辑与渲染 Markdown",
             "icon": "📝",
-            "entry": "markdown.js"
+            "entry": "../markdown.js"
         },
         {
             "id": "svg",
@@ -15,7 +15,7 @@
             "version": "1.1.0",
             "description": "透明背景渲染 SVG,可接收上游文本节点的 SVG 源码",
             "icon": "🔷",
-            "entry": "svg.js"
+            "entry": "../svg.js"
         },
         {
             "id": "html",
@@ -23,7 +23,7 @@
             "version": "1.2.0",
             "description": "沙箱 iframe 渲染 HTML,支持 {{input}} 注入上游文本",
             "icon": "🌐",
-            "entry": "html.js"
+            "entry": "../html.js"
         },
         {
             "id": "panorama",
@@ -31,7 +31,7 @@
             "version": "1.1.0",
             "description": "查看 360° 等距柱状全景图,可从上游图片节点取图",
             "icon": "🧭",
-            "entry": "panorama.js"
+            "entry": "../panorama.js"
         },
         {
             "id": "sticky-note",
@@ -39,7 +39,7 @@
             "version": "1.1.0",
             "description": "可自选颜色、双击编辑、拖动即可移动的便利贴",
             "icon": "📌",
-            "entry": "sticky-note.js"
+            "entry": "../sticky-note.js"
         },
         {
             "id": "code-block",
@@ -47,7 +47,7 @@
             "version": "1.0.0",
             "description": "等宽展示与编辑代码,行号显示 + 一键复制,可接收上游文本",
             "icon": "🧩",
-            "entry": "code-block.js"
+            "entry": "../code-block.js"
         },
         {
             "id": "table",
@@ -55,7 +55,7 @@
             "version": "1.0.0",
             "description": "画布内直接编辑的表格,支持增删行列,可输出 CSV",
             "icon": "📋",
-            "entry": "table.js"
+            "entry": "../table.js"
         },
         {
             "id": "web-embed",
@@ -63,7 +63,7 @@
             "version": "1.0.0",
             "description": "在画布中嵌入网页(iframe),可从上游文本节点读取网址",
             "icon": "🖥",
-            "entry": "web-embed.js"
+            "entry": "../web-embed.js"
         },
         {
             "id": "json-viewer",
@@ -71,7 +71,7 @@
             "version": "1.0.0",
             "description": "格式化展示 JSON,错误提示 + 一键复制,可接收上游文本",
             "icon": "🧾",
-            "entry": "json-viewer.js"
+            "entry": "../json-viewer.js"
         },
         {
             "id": "countdown",
@@ -79,7 +79,7 @@
             "version": "1.0.0",
             "description": "画布倒计时器:预设时长、暂停/继续/加时,走时钟低频刷新",
             "icon": "⏱",
-            "entry": "countdown.js"
+            "entry": "../countdown.js"
         },
         {
             "id": "todo-list",
@@ -87,7 +87,7 @@
             "version": "1.0.0",
             "description": "勾选式待办清单:回车添加、点击完成、一键清除已完成项",
             "icon": "✅",
-            "entry": "todo-list.js"
+            "entry": "../todo-list.js"
         },
         {
             "id": "storyboard",
@@ -95,7 +95,7 @@
             "version": "1.0.0",
             "description": "影视/TVC 分镜表:镜头号·景别·画面·台词·时长·提示词,一键复制全部提示词",
             "icon": "🎬",
-            "entry": "storyboard.js"
+            "entry": "../storyboard.js"
         },
         {
             "id": "shot-card",
@@ -103,7 +103,7 @@
             "version": "1.0.0",
             "description": "单镜头提示词组装:中文描述+风格芯片,一键 AI 转写为英文生成提示词",
             "icon": "🎥",
-            "entry": "shot-card.js"
+            "entry": "../shot-card.js"
         },
         {
             "id": "aspect-frame",
@@ -111,7 +111,7 @@
             "version": "1.0.0",
             "description": "按画幅显示安全框(动作区/字幕区),规划横屏/竖屏/宽银幕多版本",
             "icon": "🖼",
-            "entry": "aspect-frame.js"
+            "entry": "../aspect-frame.js"
         },
         {
             "id": "mood-palette",
@@ -119,7 +119,7 @@
             "version": "1.0.0",
             "description": "给场景定色板(5 色)+ 氛围说明,统一美术与生图色调",
             "icon": "🎨",
-            "entry": "mood-palette.js"
+            "entry": "../mood-palette.js"
         },
         {
             "id": "line-card",
@@ -127,7 +127,7 @@
             "version": "1.0.0",
             "description": "角色台词卡:台词 + 表演提示,一键复制完整台词本",
             "icon": "💬",
-            "entry": "line-card.js"
+            "entry": "../line-card.js"
         },
         {
             "id": "director-styles",
@@ -135,7 +135,7 @@
             "version": "1.0.0",
             "description": "24 位导演视觉风格档案:点选即得英文风格提示词,可拼进生图/生视频提示词",
             "icon": "🎬",
-            "entry": "director-styles.js"
+            "entry": "../director-styles.js"
         },
         {
             "id": "script-studio",
@@ -143,7 +143,7 @@
             "version": "1.0.0",
             "description": "AI 剧本创作:创意 brief + 成片形式 → 分场剧本,支持多风格改写与复制",
             "icon": "📜",
-            "entry": "script-studio.js"
+            "entry": "../script-studio.js"
         },
         {
             "id": "prompt-template",
@@ -151,7 +151,7 @@
             "version": "1.0.0",
             "description": "把常用提示词存成 {{变量}} 模板,填空复用一键复制",
             "icon": "🏷",
-            "entry": "prompt-template.js"
+            "entry": "../prompt-template.js"
         },
         {
             "id": "color-grade",
@@ -159,7 +159,7 @@
             "version": "1.0.0",
             "description": "12 种专业调色预设:色板 + 英文调色提示词,统一整片色调",
             "icon": "🌈",
-            "entry": "color-grade.js"
+            "entry": "../color-grade.js"
         },
         {
             "id": "negative-preset",
@@ -167,7 +167,7 @@
             "version": "1.0.0",
             "description": "常用负面提示词分组勾选,组合一键复制(画质/畸形/水印/视频专用等)",
             "icon": "🚫",
-            "entry": "negative-preset.js"
+            "entry": "../negative-preset.js"
         },
         {
             "id": "camera-moves",
@@ -175,7 +175,7 @@
             "version": "1.0.0",
             "description": "20 种专业运镜:说明 + 英文运镜提示词,可直接拼进视频生成提示词",
             "icon": "🎥",
-            "entry": "camera-moves.js"
+            "entry": "../camera-moves.js"
         },
         {
             "id": "emotion-guide",
@@ -183,7 +183,7 @@
             "version": "1.0.0",
             "description": "20 种人物表演情绪:表演要点 + 英文表情肢体提示词",
             "icon": "🎭",
-            "entry": "emotion-guide.js"
+            "entry": "../emotion-guide.js"
         },
         {
             "id": "lighting-setups",
@@ -191,7 +191,7 @@
             "version": "1.0.0",
             "description": "16 种经典布光方案:图解说明 + 英文布光提示词",
             "icon": "💡",
-            "entry": "lighting-setups.js"
+            "entry": "../lighting-setups.js"
         },
         {
             "id": "composition-guide",
@@ -199,7 +199,7 @@
             "version": "1.0.0",
             "description": "8 种经典构图的叠加示意:三分法/黄金分割/对角线/螺旋等,附英文构图提示词",
             "icon": "📐",
-            "entry": "composition-guide.js"
+            "entry": "../composition-guide.js"
         },
         {
             "id": "style-eras",
@@ -207,7 +207,7 @@
             "version": "1.0.0",
             "description": "20 种美术方向与年代风格:关键元素 + 英文风格提示词",
             "icon": "🏛",
-            "entry": "style-eras.js"
+            "entry": "../style-eras.js"
         },
         {
             "id": "material-texture",
@@ -215,7 +215,7 @@
             "version": "1.0.0",
             "description": "30 种材质质感关键词:分类检索 + 英文材质提示词",
             "icon": "🧱",
-            "entry": "material-texture.js"
+            "entry": "../material-texture.js"
         },
         {
             "id": "color-wheels",
@@ -223,7 +223,7 @@
             "version": "1.0.0",
             "description": "按色彩理论实时计算和谐配色:互补/类似/三角/分裂互补/四角/单色阶",
             "icon": "🌈",
-            "entry": "color-wheels.js"
+            "entry": "../color-wheels.js"
         },
         {
             "id": "video-prompt-builder",
@@ -231,7 +231,7 @@
             "version": "1.0.0",
             "description": "结构化组装视频生成提示词:首帧/动作/运镜/镜头/氛围/时长,一键复制",
             "icon": "🎞",
-            "entry": "video-prompt-builder.js"
+            "entry": "../video-prompt-builder.js"
         },
         {
             "id": "transitions",
@@ -239,7 +239,7 @@
             "version": "1.0.0",
             "description": "20 种专业转场手法:说明 + 英文转场提示词,写进脚本与剪辑提示",
             "icon": "🔀",
-            "entry": "transitions.js"
+            "entry": "../transitions.js"
         },
         {
             "id": "sound-design",
@@ -247,7 +247,7 @@
             "version": "1.0.0",
             "description": "20 种专业音效与氛围声:说明 + 英文声音设计提示词",
             "icon": "🔊",
-            "entry": "sound-design.js"
+            "entry": "../sound-design.js"
         },
         {
             "id": "wardrobe-props",
@@ -255,7 +255,7 @@
             "version": "1.0.0",
             "description": "20 条服装/妆容/道具词条:说明 + 英文造型提示词,统一人物与场景质感",
             "icon": "👔",
-            "entry": "wardrobe-props.js"
+            "entry": "../wardrobe-props.js"
         },
         {
             "id": "ai-storyboard",
@@ -263,7 +263,7 @@
             "version": "1.0.0",
             "description": "输入创意 brief + 镜头数,AI 生成逐镜分镜表(景别/画面/英文提示词),一键复制全部提示词",
             "icon": "🎞",
-            "entry": "ai-storyboard.js"
+            "entry": "../ai-storyboard.js"
         },
         {
             "id": "vo-script",
@@ -271,7 +271,7 @@
             "version": "1.0.0",
             "description": "AI 按主题与总秒数写中文旁白稿,带时间段标注与字数/语速校验",
             "icon": "🎙",
-            "entry": "vo-script.js"
+            "entry": "../vo-script.js"
         },
         {
             "id": "prompt-chain",
@@ -279,7 +279,7 @@
             "version": "1.0.0",
             "description": "首帧→尾帧→动作三段式输入,AI 生成首尾帧视频生成的完整英文提示词链",
             "icon": "🔗",
-            "entry": "prompt-chain.js"
+            "entry": "../prompt-chain.js"
         },
         {
             "id": "shot-timing",
@@ -287,7 +287,7 @@
             "version": "1.0.0",
             "description": "逐镜录入秒数,自动合计并与目标成片时长对比,超时/欠时一目了然",
             "icon": "⏳",
-            "entry": "shot-timing.js"
+            "entry": "../shot-timing.js"
         },
         {
             "id": "ad-teardown",
@@ -295,7 +295,71 @@
             "version": "1.0.0",
             "description": "粘贴广告描述,AI 按专业框架拆解:钩子/结构节奏/视听手法/文案亮点/可偷师清单",
             "icon": "🔍",
-            "entry": "ad-teardown.js"
+            "entry": "../ad-teardown.js"
+        },
+        {
+            "id": "character-bible",
+            "name": "角色圣经",
+            "version": "1.0.0",
+            "description": "固定角色身份锚点、外观、服装与表演细节，生成跨镜头一致性设定和英文提示词",
+            "icon": "🧑‍🎤",
+            "entry": "../character-bible.js"
+        },
+        {
+            "id": "scene-bible",
+            "name": "场景圣经",
+            "version": "1.0.0",
+            "description": "锁定地点空间关系、视觉锚点、固定陈设和主光方向，辅助跨镜头场景一致",
+            "icon": "🏠",
+            "entry": "../scene-bible.js"
+        },
+        {
+            "id": "lens-guide",
+            "name": "焦段镜头指南",
+            "version": "1.0.0",
+            "description": "18 组广角/标准/人像/长焦/变形宽银幕焦段参考，解释透视效果与适用景别，附英文镜头提示",
+            "icon": "🔭",
+            "entry": "../lens-guide.js"
+        },
+        {
+            "id": "blocking-board",
+            "name": "场面调度俯视板",
+            "version": "1.0.0",
+            "description": "在俯视平面图安排演员与机位，标记 180 度关系轴与机位侧，减少正反打方向错误",
+            "icon": "🗺",
+            "entry": "../blocking-board.js"
+        },
+        {
+            "id": "coverage-planner",
+            "name": "镜头覆盖规划器",
+            "version": "1.0.0",
+            "description": "把一场戏规划为主镜头/双人/正反打/单人/反应/插入与剪辑保险镜头，并检查轴线与视线",
+            "icon": "🎬",
+            "entry": "../coverage-planner.js"
+        },
+        {
+            "id": "continuity-checker",
+            "name": "连戏连续性检查",
+            "version": "1.0.0",
+            "description": "检查分镜之间的轴线、视线、动作、服装、道具、场景与光线连续性，引用证据并区分风险与待确认项",
+            "icon": "🧷",
+            "entry": "../continuity-checker.js"
+        },
+        {
+            "id": "edit-rhythm",
+            "name": "剪辑节奏规划器",
+            "version": "1.0.0",
+            "description": "按目标时长生成精确时间码剪辑节奏表：画面、转场、旁白、音乐音效与品牌落点",
+            "icon": "⏱",
+            "entry": "../edit-rhythm.js"
+        },
+        {
+            "id": "delivery-qc",
+            "name": "成片交付检查表",
+            "version": "1.0.0",
+            "description": "24 项可勾选的影视/TVC 交付复核清单，含叙事品牌、画面连续性、声音、字幕合规与文件导出",
+            "icon": "✅",
+            "entry": "../delivery-qc.js"
         }
     ]
 }
