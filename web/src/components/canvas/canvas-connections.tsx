@@ -9,6 +9,7 @@ export function ConnectionPath({
     from,
     to,
     active,
+    busy,
     onSelect,
     onContextMenu,
 }: {
@@ -16,6 +17,8 @@ export function ConnectionPath({
     from: CanvasNodeData;
     to: CanvasNodeData;
     active: boolean;
+    /** 连线任一端节点正在生成中:叠加流动虚线 + 沿线滑动光点 */
+    busy?: boolean;
     onSelect: () => void;
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
 }) {
@@ -27,6 +30,8 @@ export function ConnectionPath({
     const dx = Math.abs(endX - startX);
     const curvature = Math.max(dx * 0.5, 50);
     const pathD = `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`;
+    // animateMotion/mpath 需要文档内唯一的 path id;connection.id 在项目内唯一
+    const pathId = `vs-edge-${connection.id}`;
 
     return (
         <g>
@@ -48,6 +53,7 @@ export function ConnectionPath({
                 }}
             />
             <path
+                id={pathId}
                 d={pathD}
                 stroke={active ? theme.node.activeStroke : theme.node.muted}
                 strokeWidth={active ? 3 : 2}
@@ -55,6 +61,27 @@ export function ConnectionPath({
                 fill="none"
                 style={{ filter: active ? `drop-shadow(0 0 8px ${theme.node.activeStroke}66)` : undefined, pointerEvents: "none" }}
             />
+            {busy ? (
+                <>
+                    {/* 流动虚线:沿 from → to 方向循环前移 */}
+                    <path
+                        d={pathD}
+                        stroke={theme.node.activeStroke}
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeDasharray="6 14"
+                        fill="none"
+                        className="vs-edge-flow"
+                        style={{ pointerEvents: "none" }}
+                    />
+                    {/* 沿线滑动的光点:animateMotion 跟随贝塞尔路径 */}
+                    <circle r="4" fill={theme.node.activeStroke} className="vs-edge-pulse" style={{ filter: `drop-shadow(0 0 6px ${theme.node.activeStroke})`, pointerEvents: "none" }}>
+                        <animateMotion dur="1.6s" repeatCount="indefinite" rotate="0">
+                            <mpath href={`#${pathId}`} />
+                        </animateMotion>
+                    </circle>
+                </>
+            ) : null}
         </g>
     );
 }

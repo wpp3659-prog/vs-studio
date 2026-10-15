@@ -132,6 +132,17 @@ const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
 
+// 节点是否正在生成中:文本节点看 metadata.status,多文本/图片槽位看各自 status。
+// 用于连线工作动效(流动虚线 + 沿线光点)。
+function isNodeWorking(node: CanvasNodeData): boolean {
+    const m = node.metadata;
+    if (!m) return false;
+    if (m.status === "loading") return true;
+    if (Array.isArray(m.texts) && m.texts.some((t) => t.status === "loading")) return true;
+    if (Array.isArray(m.images) && m.images.some((i) => i.status === "loading")) return true;
+    return false;
+}
+
 function applyGeneratedVideo(item: CanvasNodeData, video: UploadedFile, extra: CanvasNodeData["metadata"] = {}): CanvasNodeData {
     const videoSize = fitNodeSize(video.width || item.width, video.height || item.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
     return {
@@ -3242,6 +3253,7 @@ function VsStudioPage() {
                                 from={from}
                                 to={to}
                                 active={selectedConnectionId === connection.id || relatedHighlight.connectionIds.has(connection.id)}
+                                busy={isNodeWorking(from) || isNodeWorking(to)}
                                 onSelect={() => {
                                     setSelectedConnectionId(connection.id);
                                     setSelectedNodeIds(new Set());

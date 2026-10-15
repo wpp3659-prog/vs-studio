@@ -613,3 +613,34 @@
     background: radial-gradient(circle at 32% 28%, #bfe9ff 0%, #56c8f5 34%, #1f7fd6 68%, #14508f 100%);
     box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.65), inset 0 -2px 4px rgba(6, 40, 80, 0.35), 0 2px 6px rgba(23, 104, 176, 0.35);
 }
+
+/* ==========================================================================
+   画布连线工作动效：节点生成中时,连线上出现流动虚线 + 沿线滑动的光点。
+   ========================================================================== */
+
+/* 流动虚线:stroke-dashoffset 循环前移,视觉上虚线沿连线方向"跑"起来。
+   dash 周期 6+14=20,offset 每圈 -20 保证无缝循环。 */
+@keyframes vs-edge-flow {
+    to {
+        stroke-dashoffset: -20;
+    }
+}
+
+.vs-edge-flow {
+    animation: vs-edge-flow 0.9s linear infinite;
+}
+
+/* 连线光点的呼吸光晕( animateMotion 负责沿线移动,这里只做发光) */
+.vs-edge-pulse {
+    animation: vs-edge-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes vs-edge-pulse {
+    0%,
+    100% {
+        opacity: 0.55;
+    }
+    50% {
+        opacity: 1;
+    }
+}
