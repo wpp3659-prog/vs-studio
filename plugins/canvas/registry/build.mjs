@@ -31,6 +31,11 @@ const OFFICIAL = [
     { id: "aspect-frame", dir: "aspect-frame", name: "画幅预览节点", description: "按画幅显示安全框(动作区/字幕区),规划横屏/竖屏/宽银幕多版本", icon: "🖼" },
     { id: "mood-palette", dir: "mood-palette", name: "色彩氛围卡", description: "给场景定色板(5 色)+ 氛围说明,统一美术与生图色调", icon: "🎨" },
     { id: "line-card", dir: "line-card", name: "台词卡", description: "角色台词卡:台词 + 表演提示,一键复制完整台词本", icon: "💬" },
+    { id: "director-styles", dir: "director-styles", name: "导演风格库", description: "24 位导演视觉风格档案:点选即得英文风格提示词,可拼进生图/生视频提示词", icon: "🎬" },
+    { id: "script-studio", dir: "script-studio", name: "剧本工坊", description: "AI 剧本创作:创意 brief + 成片形式 → 分场剧本,支持多风格改写与复制", icon: "📜" },
+    { id: "prompt-template", dir: "prompt-template", name: "提示词模板库", description: "把常用提示词存成 {{变量}} 模板,填空复用一键复制", icon: "🏷" },
+    { id: "color-grade", dir: "color-grade", name: "调色风格卡", description: "12 种专业调色预设:色板 + 英文调色提示词,统一整片色调", icon: "🌈" },
+    { id: "negative-preset", dir: "negative-preset", name: "负面词预设", description: "常用负面提示词分组勾选,组合一键复制(画质/畸形/水印/视频专用等)", icon: "🚫" },
 ];
 
 // 读取插件 package.json 的 version 作为清单版本的唯一来源
@@ -77,4 +82,9 @@ const manifest = {
     ),
 };
 await writeFile(join(outDir, "official-plugins.json"), JSON.stringify(manifest, null, 4) + "\n");
-console.log(`wrote official-plugins.json (${OFFICIAL.length} plugins) → dist/`);
+// jsDelivr 对同一 URL 的 purge 有时不生效(边缘缓存顽固)。
+// 额外把清单写入 v2/ 子目录:新路径 = 全新缓存键,遇到清单缓存陈旧时改用该路径即可。
+// 对策:再次遇到清单不更新时,把这里的 "v2" 递增为 "v3" 并同步更新前端默认地址。
+await mkdir(join(outDir, "v2"), { recursive: true });
+await writeFile(join(outDir, "v2", "official-plugins.json"), JSON.stringify(manifest, null, 4) + "\n");
+console.log(`wrote official-plugins.json (${OFFICIAL.length} plugins) → dist/ 与 dist/v2/`);
