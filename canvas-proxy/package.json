@@ -1,5 +1,5 @@
 {
-  "name": "@basketikun/canvas-proxy",
+  "name": "@wpp3659-prog/canvas-proxy",
   "version": "0.1.0",
   "description": "Minimal local forwarding proxy that lets the Infinite Canvas web app call AI provider APIs without CORS restrictions.",
   "license": "MIT",

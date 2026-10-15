@@ -1,4 +1,4 @@
-# @basketikun/canvas-proxy
+# @wpp3659-prog/canvas-proxy
 
 Infinite Canvas 的本地转发代理。浏览器直连第三方 AI 接口时经常被 CORS 拦截，启动它之后，网页会把请求先发到本机，再由本机转发到目标地址。
 
@@ -7,7 +7,7 @@ Infinite Canvas 的本地转发代理。浏览器直连第三方 AI 接口时经
 ## 使用
 
 ```bash
-npx @basketikun/canvas-proxy@latest
+npx @wpp3659-prog/canvas-proxy@latest
 ```
 
 默认监听 `http://127.0.0.1:23210`。把这个地址填进 Infinite Canvas 的「配置 → 本地代理」，并打开开关即可。
@@ -17,7 +17,7 @@ npx @basketikun/canvas-proxy@latest
 可选参数：
 
 ```bash
-npx @basketikun/canvas-proxy@latest --port 23210 --host 127.0.0.1
+npx @wpp3659-prog/canvas-proxy@latest --port 23210 --host 127.0.0.1
 ```
 
 也支持 `PORT` / `HOST` 环境变量。

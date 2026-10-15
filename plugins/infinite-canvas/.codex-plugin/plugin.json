@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "description": "Use Codex to read and operate Infinite Canvas through the local Canvas Agent MCP server.",
   "author": {
-    "name": "basketikun",
+    "name": "wpp3659-prog",
     "url": "https://canvas.best/"
   },
   "homepage": "https://canvas.best/",
-  "repository": "https://github.com/basketikun/infinite-canvas",
+  "repository": "https://github.com/wpp3659-prog/infinite-canvas",
   "license": "MIT",
   "keywords": ["infinite-canvas", "canvas", "mcp", "agent"],
   "skills": "./skills/",
@@ -16,7 +16,7 @@
     "displayName": "Infinite Canvas",
     "shortDescription": "Use Codex to operate the current Infinite Canvas board.",
     "longDescription": "Connects Codex to the local Canvas Agent MCP server so Codex can inspect the current Infinite Canvas board, create nodes, connect flows, and trigger generation through the web canvas confirmation flow.",
-    "developerName": "basketikun",
+    "developerName": "wpp3659-prog",
     "category": "Productivity",
     "capabilities": ["Canvas", "MCP", "Creative Workflow"],
     "websiteURL": "https://canvas.best/",
