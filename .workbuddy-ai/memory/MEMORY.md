@@ -9,27 +9,38 @@
 - GitHub 账号 / 仓库所有者：**wpp3659-prog**
 - npm 账号 / 包作用域：**`@wpp3659-prog`**
 - 用户自己的 git 仓库已在项目根目录初始化（`git init`，默认分支 `master`），
-  基线提交 `97ba64e 初始存档`，改名提交 `07c1e59 品牌与归属改为自有账号`。
-- 用户的 GitHub 主页：`https://github.com/wpp3659-prog`（仓库：`wpp3659-prog/infinite-canvas`）
+  基线提交 `97ba64e 初始存档`，改名提交 `07c1e59`、`be30c4d 第 3 层改名`。
+- 用户的 GitHub 主页：`https://github.com/wpp3659-prog`
+- **⚠️ 仓库还没建。** 所有链接（版本检查、插件注册表、Docker 镜像、badge）已统一为
+  `wpp3659-prog/vs-studio`；**用户建仓库时必须取 `vs-studio` 这个名字**，否则自动更新会 404。
 
-### ⚠️ 改名时的红线：技术标识符一律不能动
+### 改名已全部完成（第 1/2/3 层），新名统一为 `vs-studio`
 
-改品牌名时，**只有「给人看的文案」和「归属账号」可以改**。下面这些是**技术标识符**，
-改了会直接丢数据或让功能失效，必须原样保留 `infinite-canvas`：
+界面文案、配置目录（`~/.vs-studio`）、localforage 库名、localStorage 键前缀、
+Codex 插件名、MCP 服务器名与工具名、`@vs-studio/plugin-sdk`、画布组件
+（`vs-studio.tsx` / `VsStudio`）**全部已切换**。历史数据靠一次性迁移自动搬迁。
 
-| 标识符 | 位置 | 改了的后果 |
-|---|---|---|
-| localforage 库名 `infinite-canvas` | `web/src/lib/localforage-storage.ts`、`image-storage.ts`、`file-storage.ts` | **画布与素材全部「消失」**（数据还在旧库，程序去找新库） |
-| 配置目录 `~/.infinite-canvas` | `canvas-agent/src/config.ts` 的 `CONFIG_DIR` | 用户配置全部丢失 |
-| Codex 插件名 `infinite-canvas` | `plugins/infinite-canvas/.codex-plugin/plugin.json` 等 | 插件加载不了 |
-| MCP 工具名前缀 `mcp__infinite-canvas__*` | `canvas-agent` 与插件 | Agent 工具全部失效 |
-| localStorage key `infinite-canvas:*` | 各 store | 主题、面板状态等设置丢失 |
+### ⚠️ 这些地方**刻意保留旧名 `infinite-canvas`，不要「顺手清掉」**
 
-### ⚠️ LICENSE 必须保留原作者署名
+| 位置 | 为什么必须保留 |
+|---|---|
+| `config.ts` 的 `LEGACY_CONFIG_DIR = ~/.infinite-canvas` | 旧配置目录搬迁的源路径 |
+| `localforage-storage.ts` 的 `LEGACY_STORAGE_DB_NAME` | 旧 IndexedDB 库搬迁的源 |
+| `web/index.html` 的 `LEGACY = "infinite-canvas:"` | 旧 localStorage 键搬迁脚本 |
+| `codex-home.ts` 的 `LEGACY_BLOCK_START/END` | 用户 `~/.codex/config.toml` 里可能已有旧托管区块；只认新标记会导致旧区块残留 + 下一轮重复追加。`stripManagedBlock` **新旧各清一次**，改动时两条都要保住 |
+| `LICENSE` 的 `Copyright (c) 2026 basketikun` | **MIT 强制要求**。用户问过「能只写我自己吗」→ 答案是不能（侵权）。现为原作者 + `wpp3659-prog` 两行 |
+| `一键启动.bat` 里的 `infinite-canvas-main` | 那是**真实文件夹名**，改了找不到项目 |
 
-项目是 **MIT 协议**，允许自由修改商用，**但要求保留原版权声明**。
-所以 `LICENSE` 里的 `Copyright (c) 2026 basketikun` **不能删**。
-（用户后续若要加自己的署名，正确做法是**在下面追加一行**，而不是替换。）
+### ⚠️ 改名最容易踩的两个坑
+
+1. **`infinite-canvas` 既是品牌词，也是代码标识符**（组件名 / 文件名 / 路径 / 包名）。
+   **通配替换会把代码标识符一起改坏** —— 曾把 `project.tsx` 的
+   `@/components/canvas/infinite-canvas` 改成 `vs-studio` 而文件没改名 → 编译失败。
+   **规则：标识符类改名先改文件与定义、再改引用，单独精确替换，不进通配脚本。**
+   （`window.InfiniteCanvasRuntime` 是插件 SDK 全局契约，**必须保留**。）
+2. **配置目录改名要 grep 字面量 `.infinite-canvas`**，不能只找 `CONFIG_DIR` 引用点。
+   曾漏 `open-agent-page.mjs`（写死旧目录）→ 改名后读不到 token、浏览器静默不打开。
+   同理，**展示给用户的 CLI 命令**（`codex mcp remove xxx`）也要纳入改名清单。
 
 ### 改名后必须做的验证
 
@@ -37,7 +48,9 @@
    `model-script-editor.tsx` 的 antd `styles.content`）。
 2. 改完 `canvas-agent/src/**` **必须 `tsc` 重新 build**，否则 `dist/` 还是旧包名。
 3. `npm test` 应为 **133 tests / 131 pass / 0 fail / 2 skip**。
-4. ⚠️ **`package-lock.json` 与 `bun.lock` 不要手改**（锁文件，手改会破坏依赖一致性）。
+4. 全仓复查残留：`grep -rn "infinite-canvas" . --include=...`，排除
+   `node_modules` / `dist` / `package-lock.json`；剩下的应**只有**上面表格里那些。
+5. ⚠️ **`package-lock.json` 与 `bun.lock` 不要手改**（锁文件，手改会破坏依赖一致性）。
 
 ## Agent 模型下拉 = 渠道模型清单，不是 Codex 内置目录
 
