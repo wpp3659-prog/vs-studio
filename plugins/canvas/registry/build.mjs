@@ -44,6 +44,14 @@ const OFFICIAL = [
     { id: "material-texture", dir: "material-texture", name: "材质质感库", description: "30 种材质质感关键词:分类检索 + 英文材质提示词", icon: "🧱" },
     { id: "color-wheels", dir: "color-wheels", name: "色彩和谐生成器", description: "按色彩理论实时计算和谐配色:互补/类似/三角/分裂互补/四角/单色阶", icon: "🌈" },
     { id: "video-prompt-builder", dir: "video-prompt-builder", name: "视频提示词构建器", description: "结构化组装视频生成提示词:首帧/动作/运镜/镜头/氛围/时长,一键复制", icon: "🎞" },
+    { id: "transitions", dir: "transitions", name: "转场词典", description: "20 种专业转场手法:说明 + 英文转场提示词,写进脚本与剪辑提示", icon: "🔀" },
+    { id: "sound-design", dir: "sound-design", name: "音效氛围库", description: "20 种专业音效与氛围声:说明 + 英文声音设计提示词", icon: "🔊" },
+    { id: "wardrobe-props", dir: "wardrobe-props", name: "服化道词库", description: "20 条服装/妆容/道具词条:说明 + 英文造型提示词,统一人物与场景质感", icon: "👔" },
+    { id: "ai-storyboard", dir: "ai-storyboard", name: "AI 分镜自动化", description: "输入创意 brief + 镜头数,AI 生成逐镜分镜表(景别/画面/英文提示词),一键复制全部提示词", icon: "🎞" },
+    { id: "vo-script", dir: "vo-script", name: "旁白配音稿", description: "AI 按主题与总秒数写中文旁白稿,带时间段标注与字数/语速校验", icon: "🎙" },
+    { id: "prompt-chain", dir: "prompt-chain", name: "首尾帧提示词链", description: "首帧→尾帧→动作三段式输入,AI 生成首尾帧视频生成的完整英文提示词链", icon: "🔗" },
+    { id: "shot-timing", dir: "shot-timing", name: "镜头时长预算", description: "逐镜录入秒数,自动合计并与目标成片时长对比,超时/欠时一目了然", icon: "⏳" },
+    { id: "ad-teardown", dir: "ad-teardown", name: "广告拆解卡", description: "粘贴广告描述,AI 按专业框架拆解:钩子/结构节奏/视听手法/文案亮点/可偷师清单", icon: "🔍" },
 ];
 
 // 读取插件 package.json 的 version 作为清单版本的唯一来源
