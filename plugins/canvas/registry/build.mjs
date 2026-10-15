@@ -20,6 +20,12 @@ const OFFICIAL = [
     { id: "html", dir: "html", name: "HTML 节点", description: "沙箱 iframe 渲染 HTML,支持 {{input}} 注入上游文本", icon: "🌐" },
     { id: "panorama", dir: "panorama", name: "3D 全景节点", description: "查看 360° 等距柱状全景图,可从上游图片节点取图", icon: "🧭" },
     { id: "sticky-note", dir: "sticky-note", name: "便利贴节点", description: "可自选颜色、双击编辑、拖动即可移动的便利贴", icon: "📌" },
+    { id: "code-block", dir: "code-block", name: "代码块节点", description: "等宽展示与编辑代码,行号显示 + 一键复制,可接收上游文本", icon: "🧩" },
+    { id: "table", dir: "table", name: "表格节点", description: "画布内直接编辑的表格,支持增删行列,可输出 CSV", icon: "📋" },
+    { id: "web-embed", dir: "web-embed", name: "网页嵌入节点", description: "在画布中嵌入网页(iframe),可从上游文本节点读取网址", icon: "🖥" },
+    { id: "json-viewer", dir: "json-viewer", name: "JSON 查看器", description: "格式化展示 JSON,错误提示 + 一键复制,可接收上游文本", icon: "🧾" },
+    { id: "countdown", dir: "countdown", name: "倒计时节点", description: "画布倒计时器:预设时长、暂停/继续/加时,走时钟低频刷新", icon: "⏱" },
+    { id: "todo-list", dir: "todo-list", name: "待办清单节点", description: "勾选式待办清单:回车添加、点击完成、一键清除已完成项", icon: "✅" },
 ];
 
 // 读取插件 package.json 的 version 作为清单版本的唯一来源
