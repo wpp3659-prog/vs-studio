@@ -10,12 +10,12 @@ import { getMDXComponents } from '@/components/mdx';
 const messages = {
   en: {
     title: 'VS studio Documentation',
-    description: 'Features, canvas guides, deployment, development, business, and support',
+    description: 'Features, canvas guides, deployment, development, business, and security',
     index: 'index.md',
   },
   'zh-CN': {
     title: 'VS studio文档',
-    description: '功能说明、操作手册、部署方式、开发文档、商务合作与赞助支持',
+    description: '功能说明、操作手册、部署方式、开发文档、商务合作与安全说明',
     index: 'index.zh-CN.md',
   },
 };

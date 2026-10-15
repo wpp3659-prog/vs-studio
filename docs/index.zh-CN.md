@@ -23,10 +23,9 @@
 - [开源协议](/zh-CN/docs/business/license)
 - [商务合作](/zh-CN/docs/business/business)
 
-## 支持与安全
+## 安全
 
 - [漏洞提交](/zh-CN/docs/support/security)
-- [赞助支持](/zh-CN/docs/support/sponsor)
 
 ## 项目进度
 
