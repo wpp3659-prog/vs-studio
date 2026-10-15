@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { BookOpen, Download, Home, Images, Menu, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
+import { Download, Home, Images, Menu, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
 import { Dropdown, Tooltip } from "antd";
 import { useTranslation } from "react-i18next";
 
@@ -7,7 +7,6 @@ import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useCanvasSidePanelStore } from "@/stores/use-canvas-side-panel-store";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { DOCS_URL } from "@/constant/env";
 
 export function CanvasTopBar({
     title,
@@ -88,7 +87,6 @@ export function CanvasTopBar({
                         menu={{
                             items: [
                                 { key: "home", icon: <Home className="size-4" />, label: t("canvas.home"), onClick: onHome },
-                                { key: "docs", icon: <BookOpen className="size-4" />, label: t("canvas.docs"), onClick: () => window.open(DOCS_URL, "_blank", "noopener,noreferrer") },
                                 { key: "projects", icon: <Images className="size-4" />, label: t("canvas.projects"), onClick: onProjects },
                                 { type: "divider" },
                                 { key: "new", icon: <Plus className="size-4" />, label: t("canvas.create"), onClick: onCreateProject },
