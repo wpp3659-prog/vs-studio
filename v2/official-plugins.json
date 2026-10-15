@@ -232,6 +232,70 @@
             "description": "结构化组装视频生成提示词:首帧/动作/运镜/镜头/氛围/时长,一键复制",
             "icon": "🎞",
             "entry": "video-prompt-builder.js"
+        },
+        {
+            "id": "transitions",
+            "name": "转场词典",
+            "version": "1.0.0",
+            "description": "20 种专业转场手法:说明 + 英文转场提示词,写进脚本与剪辑提示",
+            "icon": "🔀",
+            "entry": "transitions.js"
+        },
+        {
+            "id": "sound-design",
+            "name": "音效氛围库",
+            "version": "1.0.0",
+            "description": "20 种专业音效与氛围声:说明 + 英文声音设计提示词",
+            "icon": "🔊",
+            "entry": "sound-design.js"
+        },
+        {
+            "id": "wardrobe-props",
+            "name": "服化道词库",
+            "version": "1.0.0",
+            "description": "20 条服装/妆容/道具词条:说明 + 英文造型提示词,统一人物与场景质感",
+            "icon": "👔",
+            "entry": "wardrobe-props.js"
+        },
+        {
+            "id": "ai-storyboard",
+            "name": "AI 分镜自动化",
+            "version": "1.0.0",
+            "description": "输入创意 brief + 镜头数,AI 生成逐镜分镜表(景别/画面/英文提示词),一键复制全部提示词",
+            "icon": "🎞",
+            "entry": "ai-storyboard.js"
+        },
+        {
+            "id": "vo-script",
+            "name": "旁白配音稿",
+            "version": "1.0.0",
+            "description": "AI 按主题与总秒数写中文旁白稿,带时间段标注与字数/语速校验",
+            "icon": "🎙",
+            "entry": "vo-script.js"
+        },
+        {
+            "id": "prompt-chain",
+            "name": "首尾帧提示词链",
+            "version": "1.0.0",
+            "description": "首帧→尾帧→动作三段式输入,AI 生成首尾帧视频生成的完整英文提示词链",
+            "icon": "🔗",
+            "entry": "prompt-chain.js"
+        },
+        {
+            "id": "shot-timing",
+            "name": "镜头时长预算",
+            "version": "1.0.0",
+            "description": "逐镜录入秒数,自动合计并与目标成片时长对比,超时/欠时一目了然",
+            "icon": "⏳",
+            "entry": "shot-timing.js"
+        },
+        {
+            "id": "ad-teardown",
+            "name": "广告拆解卡",
+            "version": "1.0.0",
+            "description": "粘贴广告描述,AI 按专业框架拆解:钩子/结构节奏/视听手法/文案亮点/可偷师清单",
+            "icon": "🔍",
+            "entry": "ad-teardown.js"
         }
     ]
 }
