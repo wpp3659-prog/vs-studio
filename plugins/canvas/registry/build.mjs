@@ -36,6 +36,14 @@ const OFFICIAL = [
     { id: "prompt-template", dir: "prompt-template", name: "提示词模板库", description: "把常用提示词存成 {{变量}} 模板,填空复用一键复制", icon: "🏷" },
     { id: "color-grade", dir: "color-grade", name: "调色风格卡", description: "12 种专业调色预设:色板 + 英文调色提示词,统一整片色调", icon: "🌈" },
     { id: "negative-preset", dir: "negative-preset", name: "负面词预设", description: "常用负面提示词分组勾选,组合一键复制(画质/畸形/水印/视频专用等)", icon: "🚫" },
+    { id: "camera-moves", dir: "camera-moves", name: "运镜词典", description: "20 种专业运镜:说明 + 英文运镜提示词,可直接拼进视频生成提示词", icon: "🎥" },
+    { id: "emotion-guide", dir: "emotion-guide", name: "表演情绪库", description: "20 种人物表演情绪:表演要点 + 英文表情肢体提示词", icon: "🎭" },
+    { id: "lighting-setups", dir: "lighting-setups", name: "布光方案库", description: "16 种经典布光方案:图解说明 + 英文布光提示词", icon: "💡" },
+    { id: "composition-guide", dir: "composition-guide", name: "构图指南", description: "8 种经典构图的叠加示意:三分法/黄金分割/对角线/螺旋等,附英文构图提示词", icon: "📐" },
+    { id: "style-eras", dir: "style-eras", name: "美术风格库", description: "20 种美术方向与年代风格:关键元素 + 英文风格提示词", icon: "🏛" },
+    { id: "material-texture", dir: "material-texture", name: "材质质感库", description: "30 种材质质感关键词:分类检索 + 英文材质提示词", icon: "🧱" },
+    { id: "color-wheels", dir: "color-wheels", name: "色彩和谐生成器", description: "按色彩理论实时计算和谐配色:互补/类似/三角/分裂互补/四角/单色阶", icon: "🌈" },
+    { id: "video-prompt-builder", dir: "video-prompt-builder", name: "视频提示词构建器", description: "结构化组装视频生成提示词:首帧/动作/运镜/镜头/氛围/时长,一键复制", icon: "🎞" },
 ];
 
 // 读取插件 package.json 的 version 作为清单版本的唯一来源
