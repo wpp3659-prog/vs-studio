@@ -1,14 +1,14 @@
 {
-  "name": "infinite-canvas-local",
+  "name": "vs-studio-local",
   "interface": {
-    "displayName": "Infinite Canvas"
+    "displayName": "VS studio"
   },
   "plugins": [
     {
-      "name": "infinite-canvas",
+      "name": "vs-studio",
       "source": {
         "source": "local",
-        "path": "./plugins/infinite-canvas"
+        "path": "./plugins/vs-studio"
       },
       "policy": {
         "installation": "AVAILABLE",

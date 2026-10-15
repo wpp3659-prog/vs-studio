@@ -13,8 +13,12 @@ export const USER_CODEX_HOME = process.env.CODEX_HOME?.trim() || path.join(os.ho
 export type AgentChannelModel = { name: string; baseUrl: string; apiKey: string; apiFormat: string; model: string };
 
 const CONFIG_FILE = "config.toml";
-const BLOCK_START = "# >>> infinite-canvas agent provider >>>";
-const BLOCK_END = "# <<< infinite-canvas agent provider <<<";
+const BLOCK_START = "# >>> vs-studio agent provider >>>";
+const BLOCK_END = "# <<< vs-studio agent provider <<<";
+// 品牌改名前的旧区块标记。用户 config.toml 里可能还留着旧区块，
+// 只认新标记会导致旧区块被当成用户内容残留、下一轮再追加一份。读到就一起清掉。
+const LEGACY_BLOCK_START = "# >>> infinite-canvas agent provider >>>";
+const LEGACY_BLOCK_END = "# <<< infinite-canvas agent provider <<<";
 
 /** 读取用户原始 config.toml；不存在时返回空字符串。 */
 function readUserConfig(): string {
@@ -27,11 +31,16 @@ function readUserConfig(): string {
 
 /** 移除上一轮由画布写入的托管区块，保留用户其余原始内容。 */
 function stripManagedBlock(text: string) {
-    const start = text.indexOf(BLOCK_START);
+    return stripOneBlock(stripOneBlock(text, LEGACY_BLOCK_START, LEGACY_BLOCK_END), BLOCK_START, BLOCK_END);
+}
+
+/** 按给定起止标记删掉一段托管区块；标记缺失时原样返回。 */
+function stripOneBlock(text: string, startMark: string, endMark: string) {
+    const start = text.indexOf(startMark);
     if (start < 0) return text;
-    const end = text.indexOf(BLOCK_END);
+    const end = text.indexOf(endMark);
     if (end < 0) return text.slice(0, start).trimEnd();
-    return `${text.slice(0, start)}${text.slice(end + BLOCK_END.length)}`.trimEnd();
+    return `${text.slice(0, start)}${text.slice(end + endMark.length)}`.trimEnd();
 }
 
 /** 移除顶层 `model_provider` / `model` / `model_reasoning_effort`，避免与画布渠道冲突。 */

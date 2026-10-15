@@ -15,3 +15,6 @@ web/public/plugins
 plugins/canvas/*/dist
 plugins/canvas/*/node_modules
 web/public/plugins
+# 本地 AI 工作记录：备份目录与临时脚本不进版本库（memory 保留用于跨会话上下文）
+.workbuddy-ai/backup-*/
+.workbuddy-ai/rename-*.py

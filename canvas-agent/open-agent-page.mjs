@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const configPath = path.join(os.homedir(), ".infinite-canvas", "canvas-agent.json");
+const configPath = path.join(os.homedir(), ".vs-studio", "canvas-agent.json");
 // 画布前端 dev server 地址；可由环境变量覆盖。
 const webUrl = (process.env.CANVAS_WEB_URL || "http://127.0.0.1:8760").replace(/\/$/, "");
 const readyUrl = (process.env.CANVAS_AGENT_READY_URL || "http://127.0.0.1:17371/health");

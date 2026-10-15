@@ -42,7 +42,7 @@ for (const plugin of OFFICIAL) {
         target: "es2020",
         // automatic JSX → SDK 的 jsx-runtime(内部用宿主 React),react external
         jsx: "automatic",
-        jsxImportSource: "@infinite-canvas/plugin-sdk",
+        jsxImportSource: "@vs-studio/plugin-sdk",
         loader: { ".ts": "ts", ".tsx": "tsx", ".css": "text" },
         external: ["react", "react-dom"],
         minify: true,

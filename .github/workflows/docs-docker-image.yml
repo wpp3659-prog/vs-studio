@@ -10,7 +10,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/wpp3659-prog/infinite-canvas-docs
+  IMAGE_NAME: ghcr.io/wpp3659-prog/vs-studio-docs
 
 jobs:
   meta:

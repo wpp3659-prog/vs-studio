@@ -1,9 +1,9 @@
 ﻿@echo off
 chcp 65001 >nul
-title infinite-canvas 一键启动
+title VS studio 一键启动
 
 rem ==========================================================
-rem   infinite-canvas + 本地 Canvas-Agent 一键启动脚本
+rem   VS studio + 本地 Canvas-Agent 一键启动脚本
 rem ==========================================================
 
 set "ROOT=%~dp0"
@@ -16,7 +16,7 @@ if exist "%ROOT%infinite-canvas-main\web\package.json" (
 echo.
 echo ==========================================================
 echo   [错误] 找不到项目目录！
-echo   请确保一键启动.bat 放置在 infinite-canvas 项目根目录下。
+echo   请确保一键启动.bat 放置在项目根目录下。
 echo ==========================================================
 echo.
 pause
@@ -26,11 +26,11 @@ exit /b 1
 cd /d "%ROOT%"
 
 echo ==========================================================
-echo               infinite-canvas 一键启动
+echo               VS studio 一键启动
 echo ==========================================================
 echo.
 echo  将自动启动以下两个服务：
-echo    [1] infinite-canvas 画布网页 [端口: 8760]
+echo    [1] VS studio 画布网页 [端口: 8760]
 echo    [2] canvas-agent 本地 Agent  [端口: 17371]
 echo.
 echo  启动完成后，会自动打开默认浏览器并自动连接 Agent。
@@ -126,7 +126,7 @@ rem ---- 5. 启动服务 ----
 echo [5/5] 正在启动服务...
 
 pushd "%ROOT%web"
-start "infinite-canvas 画布网页 (端口 8760)" cmd /k "npm run dev"
+start "VS studio 画布网页 (端口 8760)" cmd /k "npm run dev"
 popd
 
 pushd "%ROOT%canvas-agent"

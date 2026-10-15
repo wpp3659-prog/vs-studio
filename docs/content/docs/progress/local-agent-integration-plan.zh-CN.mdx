@@ -75,7 +75,7 @@ node dist/index.js
 启动后输出：
 
 ```txt
-Infinite Canvas Agent
+VS studio Agent
 Local URL: http://127.0.0.1:17371
 Connect token: xxxxxx
 ```
@@ -135,16 +135,16 @@ Codex CLI <-> canvas-agent MCP <-> 当前网页画布
 用户本机 Codex 配置示例：
 
 ```bash
-codex mcp add infinite-canvas -- npx -y @wpp3659-prog/canvas-agent@latest mcp
+codex mcp add vs-studio -- npx -y @wpp3659-prog/canvas-agent@latest mcp
 ```
 
 本仓库调试时可使用，实际配置建议替换为本机绝对路径：
 
 ```bash
-codex mcp add infinite-canvas -- node /path/to/infinite-canvas/canvas-agent/dist/index.js mcp
+codex mcp add vs-studio -- node /path/to/vs-studio/canvas-agent/dist/index.js mcp
 ```
 
-网页侧边栏助手另走 Canvas Agent 的对话通道。Canvas Agent 使用官方 `@openai/codex` CLI 的 `codex app-server --stdio` 启动并续用同一个 thread，启动时会注入 `infinite-canvas` MCP 配置并把 `default_tools_approval_mode` 设为 `approve`，避免 Codex 自己的 MCP 审批卡住侧边栏；真正修改画布前由网页侧边栏做二次确认。
+网页侧边栏助手另走 Canvas Agent 的对话通道。Canvas Agent 使用官方 `@openai/codex` CLI 的 `codex app-server --stdio` 启动并续用同一个 thread，启动时会注入 `vs-studio` MCP 配置并把 `default_tools_approval_mode` 设为 `approve`，避免 Codex 自己的 MCP 审批卡住侧边栏；真正修改画布前由网页侧边栏做二次确认。
 
 侧边栏图片附件通过 HTTP 发送到本机 Canvas Agent，Canvas Agent 临时写入本机文件后作为 app-server `localImage` 输入传给 Codex；MVP 会在输入区提示附件体积，单次请求体限制为 30MB。
 
@@ -189,10 +189,10 @@ Claude Code 侧当前 MVP 先调用本机 Claude Code CLI 的流式 JSON 输出�
 如果希望 Claude Code 也能操作当前画布，需要给 Claude Code 配置同一个 MCP：
 
 ```bash
-claude mcp add --scope user --transport stdio infinite-canvas -- npx -y @wpp3659-prog/canvas-agent@latest mcp
+claude mcp add --scope user --transport stdio vs-studio -- npx -y @wpp3659-prog/canvas-agent@latest mcp
 ```
 
-Canvas Agent 调用 Claude Code 时默认允许 `mcp__infinite-canvas__*`，避免 print 模式被工具审批卡住；真正修改画布仍由网页侧边栏确认。
+Canvas Agent 调用 Claude Code 时默认允许 `mcp__vs-studio__*`，避免 print 模式被工具审批卡住；真正修改画布仍由网页侧边栏确认。
 
 参考：
 
@@ -221,7 +221,7 @@ Canvas Agent 调用 Claude Code 时默认允许 `mcp__infinite-canvas__*`，避�
 ### 第二阶段：网页侧边栏连接 Codex
 
 1. 前端新增本地 Agent 侧边栏。
-2. Canvas Agent 通过官方 `@openai/codex` CLI 的 `codex app-server --stdio` 接入 Codex，复用同一个 thread，注入 `infinite-canvas` MCP，并展示结构化事件流。
+2. Canvas Agent 通过官方 `@openai/codex` CLI 的 `codex app-server --stdio` 接入 Codex，复用同一个 thread，注入 `vs-studio` MCP，并展示结构化事件流。
 3. 运行日志只保留关键 Codex 事件，避免把流式中间更新刷满日志。
 4. 侧边栏展示消息流、工具调用、工具结果、错误和图片附件大小提示。
 

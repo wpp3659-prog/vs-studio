@@ -1,4 +1,4 @@
-# Infinite Canvas Documentation Index
+# VS studio Documentation Index
 
 ## Overview
 

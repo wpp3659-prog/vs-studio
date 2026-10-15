@@ -4,7 +4,7 @@ import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { ViewportTransform } from "@/types/canvas";
 
-type InfiniteCanvasProps = {
+type VsStudioProps = {
     containerRef: React.RefObject<HTMLDivElement | null>;
     viewport: ViewportTransform;
     tool: "select" | "pan";
@@ -18,7 +18,7 @@ type InfiniteCanvasProps = {
     children: React.ReactNode;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, tool, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDeselect, onCanvasDoubleClick, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
+export function VsStudio({ containerRef, viewport, tool, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDeselect, onCanvasDoubleClick, onContextMenu, onDrop, children }: VsStudioProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const panState = useRef({
         isPanning: false,

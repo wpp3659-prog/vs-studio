@@ -1,6 +1,6 @@
 services:
   docs:
-    image: ghcr.io/wpp3659-prog/infinite-canvas-docs:latest
+    image: ghcr.io/wpp3659-prog/vs-studio-docs:latest
     ports:
       - "3001:3000"
     restart: unless-stopped

@@ -1,9 +1,9 @@
 ﻿@echo off
 chcp 65001 >nul
-title infinite-canvas 一键重启
+title VS studio 一键重启
 
 echo ==========================================================
-echo               infinite-canvas 一键重启
+echo               VS studio 一键重启
 echo ==========================================================
 echo.
 echo 正在停止现有服务并释放端口...

@@ -4,11 +4,31 @@ import os from "node:os";
 import path from "node:path";
 
 export const DEFAULT_PORT = 17371;
-export const CONFIG_DIR = path.join(os.homedir(), ".infinite-canvas");
+export const CONFIG_DIR = path.join(os.homedir(), ".vs-studio");
+/** 改造前的旧配置目录；仅用于一次性搬迁。 */
+const LEGACY_CONFIG_DIR = path.join(os.homedir(), ".infinite-canvas");
 export const CONFIG_FILE = path.join(CONFIG_DIR, "canvas-agent.json");
 export const VERSION = readPackageVersion();
 export const AGENT_PROMPT = fs.readFileSync(new URL("../agent-instructions.md", import.meta.url), "utf8");
 const initializedWorkspaces = new Set<string>();
+
+migrateLegacyConfigDir();
+
+/**
+ * 把旧配置目录一次性搬到新目录。
+ * 旧目录还在、新目录还没建时才会搬，搬完把旧目录改名留底（不直接删，方便回退）。
+ * 已经完成迁移或全新安装时这一步是空操作。
+ */
+function migrateLegacyConfigDir() {
+    try {
+        if (fs.existsSync(CONFIG_DIR) || !fs.existsSync(LEGACY_CONFIG_DIR)) return;
+        fs.renameSync(LEGACY_CONFIG_DIR, CONFIG_DIR);
+        console.log(`[config] migrated ${LEGACY_CONFIG_DIR} -> ${CONFIG_DIR}`);
+    } catch (error) {
+        // 迁移失败时把原因打出来，避免用户以为配置凭空消失。
+        console.warn(`[config] failed to migrate ${LEGACY_CONFIG_DIR}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
 
 export type SiteWorkspaceConfig = { workspacePath: string; activeThreadId?: string; pinnedThreadIds?: string[] };
 export type AgentChannelModel = { name: string; effort: string; default?: boolean };
@@ -84,7 +104,7 @@ function initializeWorkspace(workspacePath: string) {
     fs.mkdirSync(workspacePath, { recursive: true });
     const instructionsFile = path.join(workspacePath, "AGENTS.md");
     const current = fs.existsSync(instructionsFile) ? fs.readFileSync(instructionsFile, "utf8") : "";
-    if (!current || current.startsWith("# Infinite Canvas Agent")) fs.writeFileSync(instructionsFile, AGENT_PROMPT);
+    if (!current || current.startsWith("# VS studio Agent")) fs.writeFileSync(instructionsFile, AGENT_PROMPT);
     initializedWorkspaces.add(workspacePath);
 }
 

@@ -11,7 +11,7 @@ const messages = {
   en: {
     title: 'Changelog',
     description: 'Project release history',
-    content: '# Changelog\n\nThe detailed changelog is currently maintained in Chinese. See the [source changelog](https://github.com/wpp3659-prog/infinite-canvas/blob/main/CHANGELOG.md) for all releases.',
+    content: '# Changelog\n\nThe detailed changelog is currently maintained in Chinese. See the [source changelog](https://github.com/wpp3659-prog/vs-studio/blob/main/CHANGELOG.md) for all releases.',
   },
   'zh-CN': {
     title: '更新日志',

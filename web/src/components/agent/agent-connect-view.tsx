@@ -6,8 +6,8 @@ import { useTranslation } from "react-i18next";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 
-const AGENT_PLUGIN_REMOVE_COMMAND = "codex plugin remove infinite-canvas";
-const AGENT_MCP_REMOVE_COMMAND = "codex mcp remove infinite-canvas";
+const AGENT_PLUGIN_REMOVE_COMMAND = "codex plugin remove vs-studio";
+const AGENT_MCP_REMOVE_COMMAND = "codex mcp remove vs-studio";
 
 export function AgentConnectView({
     theme,

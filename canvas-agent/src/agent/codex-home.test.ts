@@ -26,14 +26,14 @@ test("syncAgentCodexHome creates the agent home directory", () => {
 test("syncAgentCodexHome without a channel never writes a managed provider block", () => {
     const result = syncAgentCodexHome(null);
     const text = fs.readFileSync(path.join(result.home, "config.toml"), "utf8");
-    assert.equal(text.includes("infinite-canvas agent provider"), false);
+    assert.equal(text.includes("vs-studio agent provider"), false);
     assert.equal(result.hasChannel, false);
 });
 
 test("syncAgentCodexHome with a channel writes provider with bearer token", () => {
     const result = syncAgentCodexHome({ name: "测试渠道", baseUrl: "https://example.com/", apiKey: "sk-abc", apiFormat: "openai", model: "gpt-6.1-sol" });
     const text = fs.readFileSync(path.join(result.home, "config.toml"), "utf8");
-    assert.ok(text.includes("infinite-canvas agent provider"));
+    assert.ok(text.includes("vs-studio agent provider"));
     assert.ok(text.includes('model_provider = "canvas_agent"'));
     assert.ok(text.includes('model = "gpt-6.1-sol"'));
     assert.ok(text.includes('base_url = "https://example.com"'));
@@ -45,7 +45,7 @@ test("syncAgentCodexHome replaces rather than stacks managed blocks", () => {
     syncAgentCodexHome({ name: "A", baseUrl: "https://a.test", apiKey: "sk-a", apiFormat: "openai", model: "model-a" });
     const result = syncAgentCodexHome({ name: "B", baseUrl: "https://b.test", apiKey: "sk-b", apiFormat: "openai", model: "model-b" });
     const text = fs.readFileSync(path.join(result.home, "config.toml"), "utf8");
-    assert.equal(text.split("infinite-canvas agent provider").length - 1, 2);
+    assert.equal(text.split("vs-studio agent provider").length - 1, 2);
     assert.equal(text.includes("model-a"), false);
     assert.ok(text.includes('model = "model-b"'));
     assert.ok(text.includes('base_url = "https://b.test"'));
@@ -56,6 +56,7 @@ test("syncAgentCodexHome drops the channel block when channel becomes null", () 
     const result = syncAgentCodexHome(null);
     const text = fs.readFileSync(path.join(result.home, "config.toml"), "utf8");
     assert.equal(text.includes("model-a"), false);
+    assert.equal(text.includes("vs-studio agent provider"), false);
     assert.equal(result.hasChannel, false);
 });
 

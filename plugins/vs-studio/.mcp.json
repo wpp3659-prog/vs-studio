@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "infinite-canvas": {
+    "vs-studio": {
       "command": "npx",
       "args": ["-y", "@wpp3659-prog/canvas-agent@latest", "mcp"],
       "startup_timeout_sec": 20,

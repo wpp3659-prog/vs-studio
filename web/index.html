@@ -7,8 +7,23 @@
         <link rel="icon" href="/logo.svg" />
         <title>VS studio</title>
         <script>
+            // 品牌改名：把旧的 infinite-canvas: 前缀 localStorage key 搬到 vs-studio: 前缀。
+            // 这段在所有业务代码之前执行，保证后续读取新 key 时数据已经就位。
+            (function () {
+                var LEGACY = "infinite-canvas:";
+                var CURRENT = "vs-studio:";
+                try {
+                    for (var i = localStorage.length - 1; i >= 0; i--) {
+                        var key = localStorage.key(i);
+                        if (!key || key.indexOf(LEGACY) !== 0) continue;
+                        var next = CURRENT + key.slice(LEGACY.length);
+                        if (localStorage.getItem(next) === null) localStorage.setItem(next, localStorage.getItem(key));
+                        localStorage.removeItem(key);
+                    }
+                } catch (e) {}
+            })();
             try {
-                var s = JSON.parse(localStorage.getItem("infinite-canvas:theme_store") || "{}");
+                var s = JSON.parse(localStorage.getItem("vs-studio:theme_store") || "{}");
                 var t = s.state && s.state.theme === "light" ? "light" : "dark";
                 document.documentElement.classList.toggle("dark", t === "dark");
                 document.documentElement.style.colorScheme = t;

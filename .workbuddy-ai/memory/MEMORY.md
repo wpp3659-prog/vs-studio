@@ -1,5 +1,44 @@
 # 项目约定（AI 开发沉淀）
 
+## 本项目已改为自有品牌：VS studio / wpp3659-prog
+
+**这是一个 fork 出去的自有产品，已与上游 `basketikun/infinite-canvas` 切断。**
+用户明确表示「后续不需要上游更新，自己做产品」，因此**不要再建议同步上游**。
+
+- 品牌显示名：**VS studio**
+- GitHub 账号 / 仓库所有者：**wpp3659-prog**
+- npm 账号 / 包作用域：**`@wpp3659-prog`**
+- 用户自己的 git 仓库已在项目根目录初始化（`git init`，默认分支 `master`），
+  基线提交 `97ba64e 初始存档`，改名提交 `07c1e59 品牌与归属改为自有账号`。
+- 用户的 GitHub 主页：`https://github.com/wpp3659-prog`（仓库：`wpp3659-prog/infinite-canvas`）
+
+### ⚠️ 改名时的红线：技术标识符一律不能动
+
+改品牌名时，**只有「给人看的文案」和「归属账号」可以改**。下面这些是**技术标识符**，
+改了会直接丢数据或让功能失效，必须原样保留 `infinite-canvas`：
+
+| 标识符 | 位置 | 改了的后果 |
+|---|---|---|
+| localforage 库名 `infinite-canvas` | `web/src/lib/localforage-storage.ts`、`image-storage.ts`、`file-storage.ts` | **画布与素材全部「消失」**（数据还在旧库，程序去找新库） |
+| 配置目录 `~/.infinite-canvas` | `canvas-agent/src/config.ts` 的 `CONFIG_DIR` | 用户配置全部丢失 |
+| Codex 插件名 `infinite-canvas` | `plugins/infinite-canvas/.codex-plugin/plugin.json` 等 | 插件加载不了 |
+| MCP 工具名前缀 `mcp__infinite-canvas__*` | `canvas-agent` 与插件 | Agent 工具全部失效 |
+| localStorage key `infinite-canvas:*` | 各 store | 主题、面板状态等设置丢失 |
+
+### ⚠️ LICENSE 必须保留原作者署名
+
+项目是 **MIT 协议**，允许自由修改商用，**但要求保留原版权声明**。
+所以 `LICENSE` 里的 `Copyright (c) 2026 basketikun` **不能删**。
+（用户后续若要加自己的署名，正确做法是**在下面追加一行**，而不是替换。）
+
+### 改名后必须做的验证
+
+1. `canvas-agent` 与 `web` 各跑一次 `tsc --noEmit`（`web` 有 1 个**既有**无关错误：
+   `model-script-editor.tsx` 的 antd `styles.content`）。
+2. 改完 `canvas-agent/src/**` **必须 `tsc` 重新 build**，否则 `dist/` 还是旧包名。
+3. `npm test` 应为 **133 tests / 131 pass / 0 fail / 2 skip**。
+4. ⚠️ **`package-lock.json` 与 `bun.lock` 不要手改**（锁文件，手改会破坏依赖一致性）。
+
 ## Agent 模型下拉 = 渠道模型清单，不是 Codex 内置目录
 
 **这是刻意的设计，不要改回读内置目录。**

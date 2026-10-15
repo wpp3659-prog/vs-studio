@@ -1,6 +1,6 @@
 ---
 title: Docker Deployment
-description: Deploy Infinite Canvas with Docker Compose
+description: Deploy VS studio with Docker Compose
 ---
 
 # Docker Deployment
@@ -8,8 +8,8 @@ description: Deploy Infinite Canvas with Docker Compose
 ## Use the published image
 
 ```bash
-git clone git@github.com:wpp3659-prog/infinite-canvas.git
-cd infinite-canvas
+git clone git@github.com:wpp3659-prog/vs-studio.git
+cd vs-studio
 docker compose up -d
 ```
 
@@ -51,7 +51,7 @@ No analytics are enabled by default. A deployment can enable GA4, Baidu Analytic
 ```yaml
 services:
   app:
-    image: ghcr.io/wpp3659-prog/infinite-canvas:latest
+    image: ghcr.io/wpp3659-prog/vs-studio:latest
     ports:
       - "3000:3000"
     environment:
