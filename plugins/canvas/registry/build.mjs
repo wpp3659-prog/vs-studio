@@ -3,7 +3,7 @@
 // CI(publish-plugins.yml)把 dist/ 强推到 plugins-dist 分支,前端经 jsDelivr 远程拉取。
 // 本地自测:`npm install && npm run build`,再把 VITE_PLUGIN_REGISTRY_URL 指向本地 dist。
 import { build } from "esbuild";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -52,6 +52,14 @@ const OFFICIAL = [
     { id: "prompt-chain", dir: "prompt-chain", name: "首尾帧提示词链", description: "首帧→尾帧→动作三段式输入,AI 生成首尾帧视频生成的完整英文提示词链", icon: "🔗" },
     { id: "shot-timing", dir: "shot-timing", name: "镜头时长预算", description: "逐镜录入秒数,自动合计并与目标成片时长对比,超时/欠时一目了然", icon: "⏳" },
     { id: "ad-teardown", dir: "ad-teardown", name: "广告拆解卡", description: "粘贴广告描述,AI 按专业框架拆解:钩子/结构节奏/视听手法/文案亮点/可偷师清单", icon: "🔍" },
+    { id: "character-bible", dir: "character-bible", name: "角色圣经", description: "固定角色身份锚点、外观、服装与表演细节，生成跨镜头一致性设定和英文提示词", icon: "🧑‍🎤" },
+    { id: "scene-bible", dir: "scene-bible", name: "场景圣经", description: "锁定地点空间关系、视觉锚点、固定陈设和主光方向，辅助跨镜头场景一致", icon: "🏠" },
+    { id: "lens-guide", dir: "lens-guide", name: "焦段镜头指南", description: "18 组广角/标准/人像/长焦/变形宽银幕焦段参考，解释透视效果与适用景别，附英文镜头提示", icon: "🔭" },
+    { id: "blocking-board", dir: "blocking-board", name: "场面调度俯视板", description: "在俯视平面图安排演员与机位，标记 180 度关系轴与机位侧，减少正反打方向错误", icon: "🗺" },
+    { id: "coverage-planner", dir: "coverage-planner", name: "镜头覆盖规划器", description: "把一场戏规划为主镜头/双人/正反打/单人/反应/插入与剪辑保险镜头，并检查轴线与视线", icon: "🎬" },
+    { id: "continuity-checker", dir: "continuity-checker", name: "连戏连续性检查", description: "检查分镜之间的轴线、视线、动作、服装、道具、场景与光线连续性，引用证据并区分风险与待确认项", icon: "🧷" },
+    { id: "edit-rhythm", dir: "edit-rhythm", name: "剪辑节奏规划器", description: "按目标时长生成精确时间码剪辑节奏表：画面、转场、旁白、音乐音效与品牌落点", icon: "⏱" },
+    { id: "delivery-qc", dir: "delivery-qc", name: "成片交付检查表", description: "24 项可勾选的影视/TVC 交付复核清单，含叙事品牌、画面连续性、声音、字幕合规与文件导出", icon: "✅" },
 ];
 
 // 读取插件 package.json 的 version 作为清单版本的唯一来源
@@ -61,8 +69,13 @@ async function readPluginVersion(dir) {
     return pkg.version;
 }
 
-await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
+// 清理旧构建产物但保留 dist/.git：dist 是独立发布仓库，不能被构建清掉，
+// 否则后续 git 命令会向上找到主项目仓库并把产物误提交进去。
+for (const entry of await readdir(outDir, { withFileTypes: true })) {
+    if (entry.name === ".git") continue;
+    await rm(join(outDir, entry.name), { recursive: true, force: true });
+}
 
 for (const plugin of OFFICIAL) {
     await build({
@@ -99,8 +112,10 @@ const manifest = {
 };
 await writeFile(join(outDir, "official-plugins.json"), JSON.stringify(manifest, null, 4) + "\n");
 // jsDelivr 对同一 URL 的 purge 有时不生效(边缘缓存顽固)。
-// 额外把清单写入 v2/ 子目录:新路径 = 全新缓存键,遇到清单缓存陈旧时改用该路径即可。
-// 对策:再次遇到清单不更新时,把这里的 "v3" 递增为 "v4" 并同步更新前端默认地址。
-await mkdir(join(outDir, "v3"), { recursive: true });
-await writeFile(join(outDir, "v3", "official-plugins.json"), JSON.stringify(manifest, null, 4) + "\n");
-console.log(`wrote official-plugins.json (${OFFICIAL.length} plugins) → dist/ 与 dist/v2/`);
+// 当前清单放在 v4/ 子目录作为独立缓存键；再遇到陈旧时需递增目录版本并同步前端默认地址。
+// v4 清单位于子目录，entry 必须回到上一层才能找到 dist 根目录的 bundle。
+// 对策:再次遇到清单不更新时,把这里的 "v4" 递增为 "v5" 并同步更新前端默认地址。
+await mkdir(join(outDir, "v4"), { recursive: true });
+const versionedManifest = { ...manifest, plugins: manifest.plugins.map((item) => ({ ...item, entry: `../${item.entry}` })) };
+await writeFile(join(outDir, "v4", "official-plugins.json"), JSON.stringify(versionedManifest, null, 4) + "\n");
+console.log(`wrote official-plugins.json (${OFFICIAL.length} plugins) → dist/ 与 dist/v4/`);

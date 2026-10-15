@@ -3,7 +3,7 @@ chcp 65001 >nul
 title VS studio 一键启动
 
 rem ==========================================================
-rem   VS studio + 本地 Canvas-Agent 一键启动脚本
+rem   VS studio + 本地 Canvas-Agent + 本地代理 一键启动脚本
 rem ==========================================================
 
 set "ROOT=%~dp0"
@@ -29,9 +29,10 @@ echo ==========================================================
 echo               VS studio 一键启动
 echo ==========================================================
 echo.
-echo  将自动启动以下两个服务：
+echo  将自动启动以下三个服务：
 echo    [1] VS studio 画布网页 [端口: 8760]
 echo    [2] canvas-agent 本地 Agent  [端口: 17371]
+echo    [3] 本地转发代理 [端口: 23210]
 echo.
 echo  启动完成后，会自动打开默认浏览器并自动连接 Agent。
 echo.
@@ -60,9 +61,18 @@ exit /b 1
 
 :node_ok
 
+if exist "%ROOT%canvas-proxy\index.js" goto :proxy_source_ok
+echo.
+echo [错误] 找不到本地代理文件：%ROOT%canvas-proxy\index.js
+echo 请确认 canvas-proxy 文件夹与一键启动.bat 一起放在项目目录中。
+pause
+exit /b 1
+
+:proxy_source_ok
+
 rem ---- 2. 释放旧端口占用 ----
-echo [1/5] 检查端口占用 [8760, 17371]...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Get-NetTCPConnection -LocalPort 8760, 17371 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } } catch {}; exit 0"
+echo [1/5] 检查端口占用 [8760, 17371, 23210]...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Get-NetTCPConnection -LocalPort 8760, 17371, 23210 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } } catch {}; exit 0"
 ping 127.0.0.1 -n 2 >nul
 
 rem ---- 3. 依赖检查 ----
@@ -134,15 +144,20 @@ start "" /min cmd /c "node open-agent-page.mjs"
 start "canvas-agent 本地服务 (端口 17371)" cmd /k "set ""PORT=17371"" & node dist/index.js --debug"
 popd
 
+pushd "%ROOT%canvas-proxy"
+start "VS studio 本地代理 (端口 23210)" cmd /k "node index.js"
+popd
+
 echo.
 echo ==========================================================
-echo   所有服务已成功拉起！
+echo   三个服务已启动！
 echo   稍等几秒后，浏览器会自动打开并连接本地 Agent。
+echo   WebDAV/本地代理测试现在也可以使用。
 echo.
 echo   如果浏览器未能自动打开，请手动访问：
 echo   网址: http://127.0.0.1:8760
 echo.
-echo   提示：请保持弹出的两个服务窗口运行，关闭任意一个将停止对应功能。
+echo   提示：请保持弹出的三个服务窗口运行，关闭任意一个将停止对应功能。
 echo ==========================================================
 echo.
 echo 本引导窗口将在 8 秒后自动关闭...

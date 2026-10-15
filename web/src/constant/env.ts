@@ -3,4 +3,4 @@ export const APP_VERSION = __APP_VERSION__ || "dev";
 export const DOCS_URL = import.meta.env.VITE_DOC_URL || "https://github.com/wpp3659-prog/vs-studio";
 
 // Official plugin registry URL: CI publishes to plugins-dist for jsDelivr delivery; an environment variable may override it for self-hosting.
-export const PLUGIN_REGISTRY_URL = import.meta.env.VITE_PLUGIN_REGISTRY_URL || "https://cdn.jsdelivr.net/gh/wpp3659-prog/vs-studio@plugins-dist/v3/official-plugins.json";
+export const PLUGIN_REGISTRY_URL = import.meta.env.VITE_PLUGIN_REGISTRY_URL || "https://cdn.jsdelivr.net/gh/wpp3659-prog/vs-studio@plugins-dist/v4/official-plugins.json";
