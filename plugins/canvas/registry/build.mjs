@@ -26,6 +26,11 @@ const OFFICIAL = [
     { id: "json-viewer", dir: "json-viewer", name: "JSON 查看器", description: "格式化展示 JSON,错误提示 + 一键复制,可接收上游文本", icon: "🧾" },
     { id: "countdown", dir: "countdown", name: "倒计时节点", description: "画布倒计时器:预设时长、暂停/继续/加时,走时钟低频刷新", icon: "⏱" },
     { id: "todo-list", dir: "todo-list", name: "待办清单节点", description: "勾选式待办清单:回车添加、点击完成、一键清除已完成项", icon: "✅" },
+    { id: "storyboard", dir: "storyboard", name: "分镜表节点", description: "影视/TVC 分镜表:镜头号·景别·画面·台词·时长·提示词,一键复制全部提示词", icon: "🎬" },
+    { id: "shot-card", dir: "shot-card", name: "镜头提示词卡", description: "单镜头提示词组装:中文描述+风格芯片,一键 AI 转写为英文生成提示词", icon: "🎥" },
+    { id: "aspect-frame", dir: "aspect-frame", name: "画幅预览节点", description: "按画幅显示安全框(动作区/字幕区),规划横屏/竖屏/宽银幕多版本", icon: "🖼" },
+    { id: "mood-palette", dir: "mood-palette", name: "色彩氛围卡", description: "给场景定色板(5 色)+ 氛围说明,统一美术与生图色调", icon: "🎨" },
+    { id: "line-card", dir: "line-card", name: "台词卡", description: "角色台词卡:台词 + 表演提示,一键复制完整台词本", icon: "💬" },
 ];
 
 // 读取插件 package.json 的 version 作为清单版本的唯一来源
