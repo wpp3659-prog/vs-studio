@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, CSSProperties, ReactNode } from "react";
 
 import type { CanvasAgentOp } from "@/lib/canvas/canvas-agent-ops";
 import type { CanvasTheme } from "@/lib/canvas-theme";
@@ -39,6 +39,18 @@ export type CanvasNodeToolbarItem = {
 };
 
 // Context injected while rendering each node; the primary interface between plugins and the canvas.
+export type CanvasPluginPromptInputOptions = {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    className?: string;
+    containerClassName?: string;
+    style?: CSSProperties;
+    onSubmit?: () => void;
+    // Serialize references as stable @[node:<id>] tokens instead of labels; the plugin then owns token resolution.
+    referenceTokenMode?: boolean;
+};
+
 export type CanvasNodeContext = {
     node: CanvasNodeData;
     theme: CanvasTheme;
@@ -60,9 +72,13 @@ export type CanvasNodeContext = {
     on: (event: string, handler: (payload: unknown) => void) => () => void;
     // AI image, video, and text generation using the host model configuration.
     ai: CanvasPluginAi;
+    // Text generation for this node, reusing the node's configured model (falls back to the canvas default).
+    generateText: (prompt: string, options?: GenerateTextOptions) => Promise<GenerateTextResult>;
     // Opens or closes the custom panel below this node; the definition must provide a Panel.
     openPanel: () => void;
     closePanel: () => void;
+    // Render the host's standard canvas prompt editor, including connected-resource @ mentions and reference selection.
+    renderPromptInput: (options: CanvasPluginPromptInputOptions) => ReactNode;
     // Plugin-private persistence isolated by namespace.
     storage: PluginStorage;
 };
@@ -88,6 +104,8 @@ export type CanvasPluginHost = {
     // Opens or closes the custom panel below a specified node.
     openPanel: (nodeId: string) => void;
     closePanel: () => void;
+    generateTextForNode: (nodeId: string, prompt: string, options?: GenerateTextOptions) => Promise<GenerateTextResult>;
+    renderPromptInput: (nodeId: string, options: CanvasPluginPromptInputOptions) => ReactNode;
 };
 
 // Configuration for reusing the host's built-in generation panel; see SDK CanvasBuiltinPanelConfig.

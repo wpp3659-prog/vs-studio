@@ -6,7 +6,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { pickImageSource } from "@/lib/image-thumbnail";
 import { previewUrlFor, subscribeImagePreviews, getImagePreviewRevision } from "@/services/image-storage";
-import { getNodeDefinition } from "@/lib/canvas/node-registry";
+import { getNodeDefinition, isBuiltinNodeType } from "@/lib/canvas/node-registry";
 import { buildNodeContext } from "@/lib/canvas/plugin-node-context";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
@@ -17,6 +17,11 @@ import { useTranslation } from "react-i18next";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const selectionBlue = "#2f80ff";
+
+function isNodeDragExcludedTarget(target: EventTarget | null) {
+    if (!(target instanceof HTMLElement || target instanceof SVGElement)) return false;
+    return Boolean(target.closest('button, input, textarea, select, option, a, video, audio, iframe, canvas, [role="button"], [role="slider"], [contenteditable]:not([contenteditable="false"]), [data-canvas-no-drag], [data-node-panel], .cm-editor'));
+}
 
 type CanvasNodeProps = {
     data: CanvasNodeData;
@@ -315,7 +320,9 @@ export const CanvasNode = React.memo(function CanvasNode({
                 onHoverEnd(data.id);
             }}
             onMouseDownCapture={(event) => {
-                if (!referenceSelectionState) onSelectCapture?.(event, data.id);
+                if (referenceSelectionState) return;
+                onSelectCapture?.(event, data.id);
+                if (!isBuiltinNodeType(data.type) && event.button === 0 && !isNodeDragExcludedTarget(event.target)) onMouseDown(event, data.id);
             }}
             onContextMenu={(event) => {
                 if (referenceSelectionState) event.preventDefault();
@@ -323,7 +330,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
         >
             {!referenceSelectionState && (isSelected || hovered || isEditingTitle) && (
-                <div className="absolute left-3 top-[-28px] z-[65] max-w-[calc(100%-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                <div data-canvas-no-drag className="absolute left-3 top-[-28px] z-[65] max-w-[calc(100%-24px)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                     {isEditingTitle ? (
                         <input
                             ref={titleInputRef}
@@ -367,7 +374,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     boxShadow: isGroupDropTarget ? `0 0 0 2px ${selectionBlue}66, inset 0 0 0 999px ${selectionBlue}10` : isActive ? `0 0 0 1px ${selectionBlue}55` : isRelated ? `0 0 0 1px ${theme.node.muted}55, 0 18px 48px rgba(0,0,0,.14)` : undefined,
                 }}
                 onMouseDown={(event) => {
-                    if (!referenceSelectionState) onMouseDown(event, data.id);
+                    if (!referenceSelectionState && isBuiltinNodeType(data.type)) onMouseDown(event, data.id);
                     else if (event.button === 0 && referenceSelectionState === "available") {
                         event.stopPropagation();
                         onSelectReference?.(data.id);
@@ -978,7 +985,7 @@ function ResizeHandle({ corner, onMouseDown }: { corner: ResizeCorner; onMouseDo
         "bottom-right": "-bottom-[14px] -right-[14px] cursor-nwse-resize",
     }[corner];
 
-    return <div className={`absolute z-50 size-7 ${positionClass}`} onMouseDown={(event) => onMouseDown(event, corner)} />;
+    return <div data-canvas-no-drag className={`absolute z-50 size-7 ${positionClass}`} onMouseDown={(event) => onMouseDown(event, corner)} />;
 }
 
 function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "right"; visible: boolean; onMouseDown: (event: React.MouseEvent) => void }) {
@@ -986,6 +993,7 @@ function ConnectionHandleDot({ side, visible, onMouseDown }: { side: "left" | "r
 
     return (
         <div
+            data-canvas-no-drag
             className={`absolute top-1/2 z-30 flex size-12 -translate-y-1/2 cursor-crosshair items-center justify-center transition-opacity duration-150 ${
                 side === "left" ? "-left-6" : "-right-6"
             } ${visible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}

@@ -60,14 +60,14 @@ function ScriptStudioContent({ ctx }: CanvasNodeContentProps) {
 
     return (
         <div data-canvas-no-zoom onMouseDown={stop} onWheel={stop} style={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", gap: 8, padding: 12, boxSizing: "border-box", background: ctx.theme.node.fill, borderRadius: 16, color: ctx.theme.node.text, minHeight: 0 }}>
-            <textarea
-                value={brief}
-                placeholder="一句话创意,如:「咖啡品牌,都市白领清晨第一口,治愈感」"
-                onChange={(e) => set({ brief: e.target.value })}
-                onWheel={stop}
-                rows={2}
-                style={{ flexShrink: 0, resize: "none", padding: 8, borderRadius: 8, border: `1px solid ${ctx.theme.node.stroke}`, background: ctx.theme.toolbar.panel, color: ctx.theme.node.text, outline: "none", fontSize: 12, lineHeight: 1.5, boxSizing: "border-box" }}
-            />
+            <div style={{ flexShrink: 0 }}>
+                {ctx.renderPromptInput({
+                    value: brief,
+                    onChange: (v) => set({ brief: v }),
+                    placeholder: "一句话创意,如:「咖啡品牌,都市白领清晨第一口,治愈感」;也可用 @ 引用上游文字节点",
+                    style: { padding: 8, borderRadius: 8, border: `1px solid ${ctx.theme.node.stroke}`, background: ctx.theme.toolbar.panel, color: ctx.theme.node.text, fontSize: 12, lineHeight: 1.5, boxSizing: "border-box", minHeight: 52, maxHeight: 140 },
+                })}
+            </div>
             <div style={{ flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {FORMS.map((f) => (
                     <button key={f} type="button" onClick={() => set({ form: f })} style={{ ...btn, fontSize: 11, padding: "3px 8px", background: f === form ? "rgba(99,102,241,.22)" : ctx.theme.toolbar.panel, borderColor: f === form ? "#6366f1" : ctx.theme.node.stroke }}>
@@ -102,7 +102,7 @@ function ScriptStudioContent({ ctx }: CanvasNodeContentProps) {
 export default definePlugin({
     id: "script-studio",
     name: "剧本工坊",
-    version: "1.0.0",
+    version: "1.1.0",
     description: "AI 剧本创作:创意 brief + 成片形式 → 分场剧本,支持多风格改写与复制",
     nodes: [
         {

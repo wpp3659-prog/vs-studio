@@ -54,14 +54,14 @@ function StoryboardContent({ ctx }: CanvasNodeContentProps) {
 
     return (
         <div data-canvas-no-zoom onMouseDown={stop} onWheel={stop} style={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", gap: 8, padding: 12, boxSizing: "border-box", background: ctx.theme.node.fill, borderRadius: 16, color: ctx.theme.node.text, minHeight: 0 }}>
-            <textarea
-                value={brief}
-                placeholder="创意 brief,如:「运动饮料,夏天球场,汗水和胜利」"
-                onChange={(e) => set({ brief: e.target.value })}
-                onWheel={stop}
-                rows={2}
-                style={{ flexShrink: 0, resize: "none", padding: 8, borderRadius: 8, border: `1px solid ${ctx.theme.node.stroke}`, background: ctx.theme.toolbar.panel, color: ctx.theme.node.text, outline: "none", fontSize: 12, lineHeight: 1.5, boxSizing: "border-box" }}
-            />
+            <div style={{ flexShrink: 0 }}>
+                {ctx.renderPromptInput({
+                    value: brief,
+                    onChange: (v) => set({ brief: v }),
+                    placeholder: "创意 brief,如:「运动饮料,夏天球场,汗水和胜利」;也可用 @ 引用上游剧本/文字节点",
+                    style: { padding: 8, borderRadius: 8, border: `1px solid ${ctx.theme.node.stroke}`, background: ctx.theme.toolbar.panel, color: ctx.theme.node.text, fontSize: 12, lineHeight: 1.5, boxSizing: "border-box", minHeight: 52, maxHeight: 140 },
+                })}
+            </div>
             <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 11, opacity: 0.7 }}>镜头数</span>
                 {[4, 6, 8, 10, 12].map((n) => (
@@ -92,7 +92,7 @@ function StoryboardContent({ ctx }: CanvasNodeContentProps) {
 export default definePlugin({
     id: "ai-storyboard",
     name: "AI 分镜自动化",
-    version: "1.0.0",
+    version: "1.1.0",
     description: "输入创意 brief + 镜头数,AI 生成逐镜分镜表(景别/画面/英文提示词),一键复制全部提示词",
     nodes: [
         {

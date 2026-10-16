@@ -23,8 +23,10 @@ export function buildNodeContext(host: CanvasPluginHost, node: CanvasNodeData, t
         emit: (event, payload) => emitCanvasEvent(event, payload),
         on: (event, handler) => onCanvasEvent(event, handler),
         ai: host.ai,
+        generateText: (prompt, options) => host.generateTextForNode(node.id, prompt, options),
         openPanel: () => host.openPanel(node.id),
         closePanel: () => host.closePanel(),
+        renderPromptInput: (options) => host.renderPromptInput(node.id, options),
         storage,
     };
 }

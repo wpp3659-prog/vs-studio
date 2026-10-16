@@ -18,6 +18,7 @@ type Props = {
     className?: string;
     style?: CSSProperties;
     placeholder?: string;
+    referenceTokenMode?: boolean;
 };
 
 type MentionState = {
@@ -27,11 +28,11 @@ type MentionState = {
 
 type Token =
     | { type: "text"; value: string }
-    | { type: "reference"; label: string };
+    | { type: "reference"; label: string; nodeId?: string };
 
 // Prompt-panel contentEditable input: @ references embed thumbnail chips instead of plain label text.
 // Serialization converts chips back to reference labels so the generated value matches the former textarea semantics.
-export function CanvasPromptChipInput({ value, references, onChange, onSubmit, className, style, placeholder }: Props) {
+export function CanvasPromptChipInput({ value, references, onChange, onSubmit, className, style, placeholder, referenceTokenMode = false }: Props) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const editorRef = useRef<HTMLDivElement>(null);
     const composingRef = useRef(false);
@@ -46,7 +47,7 @@ export function CanvasPromptChipInput({ value, references, onChange, onSubmit, c
     const referenceByLabel = useMemo(() => new Map(activeReferences.map((item) => [item.label, item])), [activeReferences]);
     // Match longer labels first so a shorter label cannot split a longer one.
     const activeLabels = useMemo(() => Array.from(new Set(activeReferences.map((item) => item.label))).sort((a, b) => b.length - a.length), [activeReferences]);
-    const tokens = useMemo(() => parseTokens(value, activeLabels), [value, activeLabels]);
+    const tokens = useMemo(() => parseTokens(value, activeLabels, activeReferences, referenceTokenMode), [value, activeLabels, activeReferences, referenceTokenMode]);
 
     const candidates = useMemo(() => {
         if (!mention) return [];
@@ -66,12 +67,12 @@ export function CanvasPromptChipInput({ value, references, onChange, onSubmit, c
                 editor.append(document.createTextNode(token.value));
                 return;
             }
-            const reference = referenceByLabel.get(token.label);
-            if (reference) editor.append(createReferenceChip(reference, theme, setImagePreview));
-            else editor.append(document.createTextNode(token.label));
+            const reference = token.nodeId ? activeReferences.find((item) => item.nodeId === token.nodeId) : referenceByLabel.get(token.label);
+            if (reference) editor.append(createReferenceChip(reference, theme, setImagePreview, referenceTokenMode));
+            else editor.append(document.createTextNode(token.nodeId ? `@[node:${token.nodeId}]` : token.label));
         });
         lastEmittedRef.current = value;
-    }, [tokens, referenceByLabel, theme, value]);
+    }, [activeReferences, referenceByLabel, referenceTokenMode, theme, tokens, value]);
 
     const emit = (next: string) => {
         lastEmittedRef.current = next;
@@ -81,7 +82,7 @@ export function CanvasPromptChipInput({ value, references, onChange, onSubmit, c
     const syncFromEditor = () => {
         const editor = editorRef.current;
         if (!editor) return;
-        emit(serializeEditor(editor));
+        emit(serializeEditor(editor, referenceTokenMode));
         syncMention();
     };
 
@@ -105,7 +106,7 @@ export function CanvasPromptChipInput({ value, references, onChange, onSubmit, c
         const editor = editorRef.current;
         if (!editor) return;
         removeActiveMention();
-        const chip = createReferenceChip(reference, theme, setImagePreview);
+        const chip = createReferenceChip(reference, theme, setImagePreview, referenceTokenMode);
         const space = document.createTextNode(" ");
         const selection = window.getSelection();
         const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
@@ -121,7 +122,7 @@ export function CanvasPromptChipInput({ value, references, onChange, onSubmit, c
             placeCaretAtEnd(editor);
         }
         closeMention();
-        emit(serializeEditor(editor));
+        emit(serializeEditor(editor, referenceTokenMode));
     };
 
     const showPlaceholder = !value.trim();
@@ -272,10 +273,11 @@ function ReferencePreview({ reference }: { reference: CanvasResourceReference })
     );
 }
 
-function createReferenceChip(reference: CanvasResourceReference, theme: (typeof canvasThemes)[keyof typeof canvasThemes], onImagePreview: (url: string) => void) {
+function createReferenceChip(reference: CanvasResourceReference, theme: (typeof canvasThemes)[keyof typeof canvasThemes], onImagePreview: (url: string) => void, referenceTokenMode = false) {
     const wrapper = document.createElement("span");
     wrapper.contentEditable = "false";
     wrapper.dataset.refLabel = reference.label;
+    if (referenceTokenMode) wrapper.dataset.refNodeId = reference.nodeId;
     if (reference.kind === "image" && reference.previewUrl) {
         const image = document.createElement("img");
         image.src = reference.previewUrl;
@@ -300,19 +302,20 @@ function createReferenceChip(reference: CanvasResourceReference, theme: (typeof 
     return wrapper;
 }
 
-function serializeEditor(editor: HTMLElement) {
-    return serializeNodes(editor.childNodes).replace(/﻿/g, "");
+function serializeEditor(editor: HTMLElement, referenceTokenMode = false) {
+    return serializeNodes(editor.childNodes, referenceTokenMode).replace(/[\u200B\uFEFF]/g, "");
 }
 
-function serializeNodes(nodes: NodeListOf<ChildNode>) {
+function serializeNodes(nodes: NodeListOf<ChildNode>, referenceTokenMode = false) {
     let result = "";
     nodes.forEach((node) => {
         if (node.nodeType === Node.TEXT_NODE) result += node.textContent || "";
         if (!(node instanceof HTMLElement)) return;
         const label = node.dataset.refLabel;
-        if (label) result += label;
+        // In reference token mode chips serialize to @[node:<id>] so the stored value keeps pointing at the same node.
+        if (label) result += referenceTokenMode && node.dataset.refNodeId ? `@[node:${node.dataset.refNodeId}]` : label;
         else if (node.tagName === "BR") result += "\n";
-        else result += serializeNodes(node.childNodes);
+        else result += serializeNodes(node.childNodes, referenceTokenMode);
     });
     return result;
 }
@@ -400,7 +403,9 @@ function placeCaretAtEnd(element: HTMLElement) {
 }
 
 // Split value into text fragments and matching active labels, which are already sorted by descending length.
-function parseTokens(value: string, labels: string[]): Token[] {
+// In reference token mode the value holds stable @[node:<id>] tokens instead of labels, so chips survive renames.
+function parseTokens(value: string, labels: string[], references: CanvasResourceReference[], referenceTokenMode = false): Token[] {
+    if (referenceTokenMode) return parseReferenceTokens(value, references);
     if (!labels.length) return value ? [{ type: "text", value }] : [];
     const escaped = labels.map(escapeRegExp).join("|");
     const pattern = new RegExp(`(${escaped})`, "g");
@@ -410,6 +415,22 @@ function parseTokens(value: string, labels: string[]): Token[] {
         if (match.index === undefined) continue;
         if (match.index > lastIndex) tokens.push({ type: "text", value: value.slice(lastIndex, match.index) });
         tokens.push({ type: "reference", label: match[0] });
+        lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < value.length) tokens.push({ type: "text", value: value.slice(lastIndex) });
+    return tokens;
+}
+
+function parseReferenceTokens(value: string, references: CanvasResourceReference[]): Token[] {
+    if (!value) return [];
+    const tokens: Token[] = [];
+    let lastIndex = 0;
+    for (const match of value.matchAll(/@\[node:([^\]@\s]+)\]/g)) {
+        if (match.index === undefined) continue;
+        const reference = references.find((item) => item.nodeId === match[1]);
+        if (!reference) continue;
+        if (match.index > lastIndex) tokens.push({ type: "text", value: value.slice(lastIndex, match.index) });
+        tokens.push({ type: "reference", label: reference.label, nodeId: reference.nodeId });
         lastIndex = match.index + match[0].length;
     }
     if (lastIndex < value.length) tokens.push({ type: "text", value: value.slice(lastIndex) });

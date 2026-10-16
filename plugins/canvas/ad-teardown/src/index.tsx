@@ -40,13 +40,14 @@ function TeardownContent({ ctx }: CanvasNodeContentProps) {
 
     return (
         <div data-canvas-no-zoom onMouseDown={stop} onWheel={stop} style={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", gap: 8, padding: 12, boxSizing: "border-box", background: ctx.theme.node.fill, borderRadius: 16, color: ctx.theme.node.text, minHeight: 0 }}>
-            <textarea
-                value={input}
-                placeholder="粘贴广告描述/逐字稿,如:「苹果新年片,女孩用 Mac 剪辑全家福,结尾全家围坐看片…」越具体拆得越准"
-                onChange={(e) => set({ input: e.target.value })}
-                onWheel={stop}
-                style={{ flexShrink: 0, resize: "none", padding: 8, borderRadius: 8, border: `1px solid ${ctx.theme.node.stroke}`, background: ctx.theme.toolbar.panel, color: ctx.theme.node.text, outline: "none", fontSize: 12, lineHeight: 1.5, boxSizing: "border-box", height: 76 }}
-            />
+            <div style={{ flexShrink: 0 }}>
+                {ctx.renderPromptInput({
+                    value: input,
+                    onChange: (v) => set({ input: v }),
+                    placeholder: "粘贴广告描述/逐字稿,如:「苹果新年片,女孩用 Mac 剪辑全家福,结尾全家围坐看片…」越具体拆得越准;也可用 @ 引用上游文字节点",
+                    style: { padding: 8, borderRadius: 8, border: `1px solid ${ctx.theme.node.stroke}`, background: ctx.theme.toolbar.panel, color: ctx.theme.node.text, fontSize: 12, lineHeight: 1.5, boxSizing: "border-box", minHeight: 76, maxHeight: 160 },
+                })}
+            </div>
             <div style={{ flexShrink: 0, display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button type="button" onClick={generate} disabled={busy || !input.trim()} style={primary}>
                     {busy ? "拆解中…" : result ? "✨ 重新拆解" : "✨ 拆解这支广告"}
@@ -69,7 +70,7 @@ function TeardownContent({ ctx }: CanvasNodeContentProps) {
 export default definePlugin({
     id: "ad-teardown",
     name: "广告拆解卡",
-    version: "1.0.0",
+    version: "1.1.0",
     description: "粘贴广告描述,AI 按专业框架拆解:钩子/结构节奏/视听手法/文案亮点/可偷师清单",
     nodes: [
         {

@@ -828,18 +828,6 @@ function VsStudioPage() {
         setContextMenu,
     });
 
-    const { pluginHost, renderPluginPanel, buildNodeToolbarItems } = usePluginHost({
-        effectiveConfig,
-        isAiConfigReady,
-        openConfigDialog,
-        theme,
-        nodesRef,
-        connectionsRef,
-        viewportRef,
-        setNodes,
-        setDialogNodeId,
-        applyAgentOps,
-    });
     const createNode = useCallback(
         (type: CanvasNodeTypeId, position?: Position) => {
             const targetPosition = position || getCanvasCenter();
@@ -949,6 +937,22 @@ function VsStudioPage() {
         setSelectedConnectionId(null);
         setDialogNodeId(null);
     }, []);
+
+    // Plugin host: exposes host generation, canvas access, and the host prompt editor to plugin nodes.
+    const { pluginHost, renderPluginPanel, buildNodeToolbarItems } = usePluginHost({
+        effectiveConfig,
+        isAiConfigReady,
+        openConfigDialog,
+        theme,
+        nodesRef,
+        connectionsRef,
+        viewportRef,
+        setNodes,
+        setDialogNodeId,
+        applyAgentOps,
+        disconnectReference: disconnectNodeReference,
+        startReferenceSelection: startNodeReferenceSelection,
+    });
 
     const exitNodeReferenceSelection = useCallback(() => {
         if (!referencePickerNodeId) return;
@@ -1286,7 +1290,6 @@ function VsStudioPage() {
     );
 
     const handleNodeMouseDown = useCallback((event: ReactMouseEvent, nodeId: string) => {
-        event.stopPropagation();
         // Capture already selected the node; this only starts dragging, with a fallback selection if capture did not run.
         const currentNodes = nodesRef.current;
         const nextSelected = pendingSelectionRef.current ?? selectNodeByEvent(event, nodeId).nextSelected;

@@ -6,7 +6,7 @@
 // 真源:宿主 `web/src/types/canvas-plugin.ts` 及其引用的类型。本文件是它的公开镜像,
 // 若宿主契约变更,请同步更新此处(两者结构保持一致即可,无需逐字节相同)。
 
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, CSSProperties, ReactNode } from "react";
 
 // ---------------------------------------------------------------------------
 // 画布基础几何与节点数据
@@ -209,6 +209,19 @@ export type PluginStorage = {
     remove: (key: string) => Promise<void>;
 };
 
+// 宿主提示词输入框(与内置节点同款):支持 @ 引用连线节点、引用栏增删与图片预览。
+export type CanvasPluginPromptInputOptions = {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    className?: string;
+    containerClassName?: string;
+    style?: CSSProperties;
+    onSubmit?: () => void;
+    // 引用序列化为稳定的 @[node:<id>] token(默认 false:存可读标签,与内置节点一致,可直接送模型)
+    referenceTokenMode?: boolean;
+};
+
 export type CanvasNodeContext = {
     // 自身数据
     node: CanvasNodeData;
@@ -230,9 +243,13 @@ export type CanvasNodeContext = {
     on: (event: string, handler: (payload: unknown) => void) => () => void;
     // AI 生成能力(生图/生视频/生文本),复用宿主模型配置
     ai: CanvasPluginAi;
+    // 用本节点配置的文本模型生成文本(未配置时回落到画布默认文本模型),等价于 ai.generateText 的节点版
+    generateText: (prompt: string, options?: GenerateTextOptions) => Promise<GenerateTextResult>;
     // 打开/关闭本节点下方的自定义 Panel(需在节点定义里提供 Panel)
     openPanel: () => void;
     closePanel: () => void;
+    // 渲染宿主标准提示词输入框(含 @ 引用连线节点);插件节点因此可以和内置节点一样引用上游资源
+    renderPromptInput: (options: CanvasPluginPromptInputOptions) => ReactNode;
     // 插件私有持久化,按插件 id 命名空间隔离
     storage: PluginStorage;
 };

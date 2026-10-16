@@ -10,7 +10,8 @@ import { buildNodeContext } from "@/lib/canvas/plugin-node-context";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { ensurePluginsLoaded } from "@/lib/canvas/plugin-loader";
 import { canvasThemes } from "@/lib/canvas-theme";
-import type { CanvasNodeToolbarItem, CanvasPluginAi, CanvasPluginHost } from "@/types/canvas-plugin";
+import { CanvasPluginPromptInput } from "@/components/canvas/canvas-plugin-prompt-input";
+import type { CanvasNodeToolbarItem, CanvasPluginAi, CanvasPluginHost, GenerateTextOptions, GenerateTextResult } from "@/types/canvas-plugin";
 import type { ReferenceImage } from "@/types/image";
 import type { CanvasAgentOp } from "@/lib/canvas/canvas-agent-ops";
 import type { CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
@@ -28,6 +29,8 @@ type PluginHostParams = {
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
     applyAgentOps: (ops?: CanvasAgentOp[]) => unknown;
+    disconnectReference: (fromNodeId: string, toNodeId: string) => void;
+    startReferenceSelection: (nodeId: string) => void;
 };
 
 /**
@@ -36,19 +39,35 @@ type PluginHostParams = {
  */
 export function usePluginHost(params: PluginHostParams) {
     const { t } = useTranslation();
-    const { effectiveConfig, isAiConfigReady, openConfigDialog, theme, nodesRef, connectionsRef, viewportRef, setNodes, setDialogNodeId, applyAgentOps } = params;
+    const { effectiveConfig, isAiConfigReady, openConfigDialog, theme, nodesRef, connectionsRef, viewportRef, setNodes, setDialogNodeId, applyAgentOps, disconnectReference, startReferenceSelection } = params;
+
+    // Open the configuration dialog and throw when AI is not configured, allowing the plugin to handle the error.
+    const ensureReady = useCallback(
+        (config: AiConfig) => {
+            if (!isAiConfigReady(config, config.model)) {
+                openConfigDialog(true);
+                throw new Error(t("canvas.plugins.aiConfigRequired"));
+            }
+        },
+        [isAiConfigReady, openConfigDialog, t],
+    );
+
+    // Shared text generation: without a node it uses the global default model, with a node it reuses that node's configured model.
+    const generateTextWith = useCallback(
+        async (prompt: string, options?: GenerateTextOptions, node?: CanvasNodeData): Promise<GenerateTextResult> => {
+            const config = { ...buildGenerationConfig(effectiveConfig, node, "text"), ...(options?.model ? { model: options.model } : {}) };
+            ensureReady(config);
+            const messages: AiTextMessage[] = [...(options?.system ? [{ role: "system" as const, content: options.system }] : []), { role: "user" as const, content: prompt }];
+            const text = await requestImageQuestion(config, messages, (delta) => options?.onDelta?.(delta), { signal: options?.signal });
+            return { text };
+        },
+        [effectiveConfig, ensureReady],
+    );
 
     // Host capabilities available to plugin nodes; methods receive nodeId and are not bound to a specific node.
     const pluginAi = useMemo<CanvasPluginAi>(() => {
         // Convert plugin reference images (data URLs or URLs) into the ReferenceImage[] expected by the host generation API.
         const toReferences = (refs?: string[]): ReferenceImage[] => (refs || []).filter(Boolean).map((src, index) => ({ id: `plugin-ref-${index}`, name: `ref-${index}.png`, type: "image/png", dataUrl: src }));
-        // Open the configuration dialog and throw when AI is not configured, allowing the plugin to handle the error.
-        const ensureReady = (config: AiConfig) => {
-            if (!isAiConfigReady(config, config.model)) {
-                openConfigDialog(true);
-                throw new Error(t("canvas.plugins.aiConfigRequired"));
-            }
-        };
         return {
             generateImage: async (prompt, options) => {
                 const config = { ...buildGenerationConfig(effectiveConfig, undefined, "image"), count: String(options?.count || 1), ...(options?.model ? { model: options.model } : {}), ...(options?.size ? { size: options.size } : {}) };
@@ -76,18 +95,12 @@ export function usePluginHost(params: PluginHostParams) {
                 const file = await storeGeneratedVideo(await requestVideoGeneration(config, prompt, toReferences(options?.references), { signal: options?.signal }));
                 return { url: file.url, mimeType: file.mimeType, width: file.width, height: file.height, durationMs: file.durationMs };
             },
-            generateText: async (prompt, options) => {
-                const config = { ...buildGenerationConfig(effectiveConfig, undefined, "text"), ...(options?.model ? { model: options.model } : {}) };
-                ensureReady(config);
-                const messages: AiTextMessage[] = [...(options?.system ? [{ role: "system" as const, content: options.system }] : []), { role: "user" as const, content: prompt }];
-                const text = await requestImageQuestion(config, messages, (delta) => options?.onDelta?.(delta), { signal: options?.signal });
-                return { text };
-            },
+            generateText: (prompt, options) => generateTextWith(prompt, options),
             // List configured models for a capability; labels use the model name without the channel prefix.
             listModels: (capability) => selectableModelsByCapability(effectiveConfig, capability as ModelCapability | undefined).map((value) => ({ value, label: decodeChannelModel(value)?.model || value })),
             defaultModel: (capability) => buildGenerationConfig(effectiveConfig, undefined, capability).model,
         };
-    }, [effectiveConfig, isAiConfigReady, openConfigDialog, t]);
+    }, [effectiveConfig, generateTextWith]);
 
     const pluginHost = useMemo<CanvasPluginHost>(
         () => ({
@@ -110,8 +123,14 @@ export function usePluginHost(params: PluginHostParams) {
             ai: pluginAi,
             openPanel: (nodeId) => setDialogNodeId(nodeId),
             closePanel: () => setDialogNodeId(null),
+            // Text generation bound to a specific node: reuses that node's configured model.
+            generateTextForNode: (nodeId, prompt, options) => generateTextWith(prompt, options, nodesRef.current.find((node) => node.id === nodeId)),
+            // Render the host prompt editor (connected-resource @ mentions + reference bar) for a plugin node.
+            renderPromptInput: (nodeId, options) => (
+                <CanvasPluginPromptInput nodeId={nodeId} nodes={nodesRef.current} connections={connectionsRef.current} onDisconnectReference={disconnectReference} onStartReferenceSelection={startReferenceSelection} {...options} />
+            ),
         }),
-        [applyAgentOps, pluginAi],
+        [applyAgentOps, disconnectReference, generateTextWith, pluginAi, startReferenceSelection],
     );
 
     const renderPluginPanel = useCallback(

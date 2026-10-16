@@ -41,14 +41,14 @@ function VoScriptContent({ ctx }: CanvasNodeContentProps) {
 
     return (
         <div data-canvas-no-zoom onMouseDown={stop} onWheel={stop} style={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", gap: 8, padding: 12, boxSizing: "border-box", background: ctx.theme.node.fill, borderRadius: 16, color: ctx.theme.node.text, minHeight: 0 }}>
-            <textarea
-                value={brief}
-                placeholder="旁白主题,如:「新品香氛蜡烛,夜晚独处的仪式感」"
-                onChange={(e) => set({ brief: e.target.value })}
-                onWheel={stop}
-                rows={2}
-                style={{ flexShrink: 0, resize: "none", padding: 8, borderRadius: 8, border: `1px solid ${ctx.theme.node.stroke}`, background: ctx.theme.toolbar.panel, color: ctx.theme.node.text, outline: "none", fontSize: 12, lineHeight: 1.5, boxSizing: "border-box" }}
-            />
+            <div style={{ flexShrink: 0 }}>
+                {ctx.renderPromptInput({
+                    value: brief,
+                    onChange: (v) => set({ brief: v }),
+                    placeholder: "旁白主题,如:「新品香氛蜡烛,夜晚独处的仪式感」;也可用 @ 引用上游剧本/文字节点",
+                    style: { padding: 8, borderRadius: 8, border: `1px solid ${ctx.theme.node.stroke}`, background: ctx.theme.toolbar.panel, color: ctx.theme.node.text, fontSize: 12, lineHeight: 1.5, boxSizing: "border-box", minHeight: 52, maxHeight: 140 },
+                })}
+            </div>
             <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 11, opacity: 0.7 }}>总时长</span>
                 {[10, 15, 30, 60, 90].map((s) => (
@@ -81,7 +81,7 @@ function VoScriptContent({ ctx }: CanvasNodeContentProps) {
 export default definePlugin({
     id: "vo-script",
     name: "旁白配音稿",
-    version: "1.0.0",
+    version: "1.1.0",
     description: "AI 按主题与总秒数写中文旁白稿,带时间段标注与字数/语速校验",
     nodes: [
         {
