@@ -140,7 +140,7 @@
         {
             "id": "script-studio",
             "name": "剧本工坊",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "AI 剧本创作:创意 brief + 成片形式 → 分场剧本,支持多风格改写与复制",
             "icon": "📜",
             "entry": "script-studio.js"
@@ -260,7 +260,7 @@
         {
             "id": "ai-storyboard",
             "name": "AI 分镜自动化",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "输入创意 brief + 镜头数,AI 生成逐镜分镜表(景别/画面/英文提示词),一键复制全部提示词",
             "icon": "🎞",
             "entry": "ai-storyboard.js"
@@ -268,7 +268,7 @@
         {
             "id": "vo-script",
             "name": "旁白配音稿",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "AI 按主题与总秒数写中文旁白稿,带时间段标注与字数/语速校验",
             "icon": "🎙",
             "entry": "vo-script.js"
@@ -292,7 +292,7 @@
         {
             "id": "ad-teardown",
             "name": "广告拆解卡",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "粘贴广告描述,AI 按专业框架拆解:钩子/结构节奏/视听手法/文案亮点/可偷师清单",
             "icon": "🔍",
             "entry": "ad-teardown.js"
@@ -300,7 +300,7 @@
         {
             "id": "character-bible",
             "name": "角色圣经",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "固定角色身份锚点、外观、服装与表演细节，生成跨镜头一致性设定和英文提示词",
             "icon": "🧑‍🎤",
             "entry": "character-bible.js"
@@ -308,7 +308,7 @@
         {
             "id": "scene-bible",
             "name": "场景圣经",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "锁定地点空间关系、视觉锚点、固定陈设和主光方向，辅助跨镜头场景一致",
             "icon": "🏠",
             "entry": "scene-bible.js"
@@ -332,7 +332,7 @@
         {
             "id": "coverage-planner",
             "name": "镜头覆盖规划器",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "把一场戏规划为主镜头/双人/正反打/单人/反应/插入与剪辑保险镜头，并检查轴线与视线",
             "icon": "🎬",
             "entry": "coverage-planner.js"
@@ -340,7 +340,7 @@
         {
             "id": "continuity-checker",
             "name": "连戏连续性检查",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "检查分镜之间的轴线、视线、动作、服装、道具、场景与光线连续性，引用证据并区分风险与待确认项",
             "icon": "🧷",
             "entry": "continuity-checker.js"
@@ -348,7 +348,7 @@
         {
             "id": "edit-rhythm",
             "name": "剪辑节奏规划器",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "description": "按目标时长生成精确时间码剪辑节奏表：画面、转场、旁白、音乐音效与品牌落点",
             "icon": "⏱",
             "entry": "edit-rhythm.js"
