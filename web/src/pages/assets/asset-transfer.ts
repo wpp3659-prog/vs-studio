@@ -26,12 +26,12 @@ export async function exportAssets(assets: Asset[], filename: string) {
 
     await Promise.all(
         assets.map(async (asset) => {
-            if (asset.kind !== "image" && asset.kind !== "video") return;
+            if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "subject") return;
             const storageKey = asset.data.storageKey;
             if (!storageKey) return;
-            const blob = asset.kind === "image" ? await getImageBlob(storageKey) : await getMediaBlob(storageKey);
+            const blob = asset.kind === "video" ? await getMediaBlob(storageKey) : await getImageBlob(storageKey);
             if (!blob) return;
-            const path = `files/${safeFileName(storageKey)}.${fileExtension(blob.type, asset.kind)}`;
+            const path = `files/${safeFileName(storageKey)}.${fileExtension(blob.type, asset.kind === "video" ? "video" : "image")}`;
             files.push({ storageKey, path, mimeType: blob.type || asset.data.mimeType, bytes: blob.size });
             zipFiles.push({ name: path, data: blob });
         }),
@@ -69,5 +69,5 @@ function fileExtension(mimeType: string, kind: Asset["kind"]) {
     if (mimeType.includes("gif")) return "gif";
     if (mimeType.includes("mp4")) return "mp4";
     if (mimeType.includes("webm")) return "webm";
-    return kind === "image" ? "png" : "bin";
+    return kind === "image" || kind === "subject" ? "png" : "bin";
 }

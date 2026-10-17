@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { App, Button, Card, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
 import { saveAs } from "file-saver";
 import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
@@ -52,7 +53,7 @@ export default function AssetsPage() {
     const title = Form.useWatch("title", form) || "";
     const tags = Form.useWatch("tags", form) || [];
     const content = Form.useWatch("content", form) || "";
-    const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video"), [assets]);
+    const validAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "subject"), [assets]);
 
     const filteredAssets = useMemo(() => {
         const query = keyword.trim().toLowerCase();
@@ -84,7 +85,7 @@ export default function AssetsPage() {
     const openEdit = (asset: Asset) => {
         setEditingAsset(asset);
         setFormKind(asset.kind);
-        setImageDraft(asset.kind === "image" ? asset.data : null);
+        setImageDraft(asset.kind === "image" || asset.kind === "subject" ? asset.data : null);
         form.setFieldsValue({
             kind: asset.kind,
             title: asset.title,
@@ -101,7 +102,7 @@ export default function AssetsPage() {
         const values = await form.validateFields();
         const base = {
             title: values.title.trim(),
-            coverUrl: values.coverUrl?.trim() || (values.kind === "image" && imageDraft ? imageDraft.dataUrl : ""),
+            coverUrl: values.coverUrl?.trim() || ((values.kind === "image" || values.kind === "subject") && imageDraft ? imageDraft.dataUrl : ""),
             tags: values.tags || [],
             source: values.source?.trim(),
             note: values.note?.trim(),
@@ -110,6 +111,14 @@ export default function AssetsPage() {
 
         if (values.kind === "text") {
             const asset = { ...base, kind: "text" as const, data: { content: (values.content || "").trim() } };
+            editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
+        } else if (values.kind === "subject") {
+            if (!imageDraft) {
+                message.error(t("assets.selectImage"));
+                return;
+            }
+            const role = editingAsset?.kind === "subject" ? editingAsset.data.role : "character";
+            const asset = { ...base, kind: "subject" as const, data: { ...imageDraft, role, description: editingAsset?.kind === "subject" ? editingAsset.data.description : undefined } };
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
         } else {
             if (!imageDraft) {
@@ -557,9 +566,11 @@ async function readAssetMediaBlob(asset: Extract<Asset, { kind: "image" | "video
 
 function assetSummary(asset: Asset) {
     if (asset.kind === "text") return asset.data.content;
+    if (asset.kind === "subject") return `${i18n.t(`assets.subjectRoles.${asset.data.role}`)} · ${asset.data.description || `${asset.data.width}x${asset.data.height}`}`;
     return `${asset.data.width}x${asset.data.height} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
 }
 
 function assetSearchText(asset: Asset) {
-    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
+    const extra = asset.kind === "text" ? asset.data.content : asset.kind === "subject" ? `${asset.data.description || ""} ${asset.data.role}` : asset.data.mimeType;
+    return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), extra].join(" ").toLowerCase();
 }

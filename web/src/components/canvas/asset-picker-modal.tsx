@@ -7,7 +7,11 @@ import { cn } from "@/lib/utils";
 import { getImagePreviewRevision, subscribeImagePreviews } from "@/services/image-storage";
 import { assetCoverUrl, useAssetStore, type Asset } from "@/stores/use-asset-store";
 
-export type InsertAssetPayload = { kind: "text"; content: string; title: string } | { kind: "image"; dataUrl: string; title: string; storageKey?: string } | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number };
+export type InsertAssetPayload =
+    | { kind: "text"; content: string; title: string }
+    | { kind: "image"; dataUrl: string; storageKey?: string; title: string }
+    | { kind: "video"; url: string; storageKey?: string; title: string; width?: number; height?: number }
+    | { kind: "subject"; dataUrl: string; storageKey?: string; title: string; width?: number; height?: number; description?: string };
 
 type Props = {
     open: boolean;
@@ -27,9 +31,9 @@ export function AssetPickerModal({ open, onInsert, onClose }: Props) {
 
 const PAGE_SIZE = 8;
 
-const kindOptions = ["all", "text", "image", "video"];
+const kindOptions = ["all", "subject", "text", "image", "video"];
 
-function PickerCard({ title, kind, cover, onClick }: { title: string; kind: string; cover: string; onClick: () => void }) {
+function PickerCard({ title, kind, cover, hint, onClick }: { title: string; kind: string; cover: string; hint?: string; onClick: () => void }) {
     const { t } = useTranslation();
     return (
         <button
@@ -47,8 +51,9 @@ function PickerCard({ title, kind, cover, onClick }: { title: string; kind: stri
                     <span className="line-clamp-1 text-xs font-medium text-stone-800 dark:text-stone-200">{title}</span>
                     <Tag className="m-0 shrink-0 text-[10px]">{t(`assets.kinds.${kind}`)}</Tag>
                 </div>
+                {hint ? <div className="mt-0.5 line-clamp-1 text-[10px] text-stone-500 dark:text-stone-400">{hint}</div> : null}
             </div>
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-stone-950/0 text-sm font-medium text-white opacity-0 transition group-hover:bg-stone-950/55 group-hover:opacity-100">{t("canvas.assetPicker.insert")}</div>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-stone-950/0 text-sm font-medium text-white opacity-0 transition group-hover:bg-stone-950/55 group-hover:opacity-100">{kind === "subject" ? t("canvas.assetPicker.insertSubject") : t("canvas.assetPicker.insert")}</div>
         </button>
     );
 }
@@ -64,9 +69,9 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
     const filtered = useMemo(() => {
         const query = keyword.trim().toLowerCase();
         return assets
-            .filter((a) => a.kind === "text" || a.kind === "image" || a.kind === "video")
+            .filter((a) => a.kind === "text" || a.kind === "image" || a.kind === "video" || a.kind === "subject")
             .filter((a) => kindFilter === "all" || a.kind === kindFilter)
-            .filter((a) => !query || [a.title, ...(a.tags || [])].join(" ").toLowerCase().includes(query));
+            .filter((a) => !query || [a.title, ...(a.tags || []), a.kind === "subject" ? a.data.description || "" : ""].join(" ").toLowerCase().includes(query));
     }, [assets, keyword, kindFilter]);
 
     const visible = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
@@ -79,6 +84,8 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
     const handleInsert = (asset: Asset) => {
         if (asset.kind === "text") {
             onInsert({ kind: "text", content: asset.data.content, title: asset.title });
+        } else if (asset.kind === "subject") {
+            onInsert({ kind: "subject", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height, description: asset.data.description });
         } else {
             onInsert(asset.kind === "video" ? { kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height } : { kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title });
         }
@@ -119,7 +126,14 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
             {visible.length ? (
                 <div className="grid grid-cols-4 gap-3">
                     {visible.map((asset) => (
-                        <PickerCard key={asset.id} title={asset.title} kind={asset.kind} cover={assetCoverUrl(asset)} onClick={() => handleInsert(asset)} />
+                        <PickerCard
+                            key={asset.id}
+                            title={asset.title}
+                            kind={asset.kind}
+                            cover={assetCoverUrl(asset)}
+                            hint={asset.kind === "subject" ? `${t(`assets.subjectRoles.${asset.data.role}`)}${asset.data.description ? ` · ${asset.data.description}` : ""}` : undefined}
+                            onClick={() => handleInsert(asset)}
+                        />
                     ))}
                 </div>
             ) : (

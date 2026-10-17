@@ -6,11 +6,14 @@ import { localForageStorage } from "@/lib/localforage-storage";
 import { cleanupUnusedImages, ensureImagePreview, previewUrlFor, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { cleanupUnusedMedia, resolveMediaUrl } from "@/services/file-storage";
 
-export type AssetKind = "text" | "image" | "video";
+export type AssetKind = "text" | "image" | "video" | "subject";
 export type TextAsset = AssetBase<"text"> & { data: { content: string } };
 export type ImageAsset = AssetBase<"image"> & { data: { dataUrl: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
 export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string } };
-export type Asset = TextAsset | ImageAsset | VideoAsset;
+/** 主体（角色 / 场景 / 道具）：可复用的外观锚点，生成时可直接当参考图 */
+export type SubjectRole = "character" | "scene" | "prop";
+export type SubjectAsset = AssetBase<"subject"> & { data: { role: SubjectRole; dataUrl: string; storageKey?: string; width: number; height: number; bytes: number; mimeType: string; description?: string } };
+export type Asset = TextAsset | ImageAsset | VideoAsset | SubjectAsset;
 
 type AssetBase<T extends AssetKind> = {
     id: string;
@@ -37,9 +40,14 @@ type AssetStore = {
 
 // 卡片用缩略图渲染，自定义封面（远程地址或单独上传的封面）保持原样。
 export function assetCoverUrl(asset: Asset) {
-    const own = asset.kind === "image" ? asset.data.dataUrl : "";
+    const own = asset.kind === "image" || asset.kind === "subject" ? asset.data.dataUrl : "";
     const cover = asset.coverUrl || own;
-    return asset.kind === "image" && cover === own ? previewUrlFor(asset.data.storageKey) || cover : cover;
+    return (asset.kind === "image" || asset.kind === "subject") && cover === own ? previewUrlFor(asset.data.storageKey) || cover : cover;
+}
+
+/** 主体的第一张图可以直接当参考图使用 */
+export function subjectReference(asset: SubjectAsset) {
+    return { id: asset.id, name: asset.title, title: asset.title, url: asset.data.dataUrl, dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey };
 }
 
 const ASSET_STORE_KEY = "vs-studio:asset_store";
@@ -49,23 +57,23 @@ const assetStorage: PersistStorage<AssetStore> = {
         const value = await localForageStorage.getItem(name);
         if (!value) return null;
         const parsed = JSON.parse(value) as StorageValue<AssetStore>;
-        parsed.state.assets = await Promise.all(
-            parsed.state.assets.map(async (asset) => {
+        parsed.state.assets = (await Promise.all(
+            parsed.state.assets.map(async (asset): Promise<Asset> => {
                 if (asset.kind === "video" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
-                if (asset.kind !== "image") return asset;
+                if (asset.kind !== "image" && asset.kind !== "subject") return asset;
                 if (asset.data.storageKey) {
                     void ensureImagePreview(asset.data.storageKey);
                     return {
                         ...asset,
                         coverUrl: asset.coverUrl.startsWith("blob:") ? await resolveImageUrl(asset.data.storageKey, asset.coverUrl) : asset.coverUrl,
                         data: { ...asset.data, dataUrl: await resolveImageUrl(asset.data.storageKey, asset.data.dataUrl) },
-                    };
+                    } as Asset;
                 }
                 if (!asset.data.dataUrl.startsWith("data:image/")) return asset;
                 const image = await uploadImage(asset.data.dataUrl);
-                return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, bytes: image.bytes, mimeType: image.mimeType } };
+                return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, bytes: image.bytes, mimeType: image.mimeType } } as Asset;
             }),
-        );
+        )) as Asset[];
         return parsed;
     },
     setItem: (name, value) => localForageStorage.setItem(name, JSON.stringify(value)),

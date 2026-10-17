@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { App, Empty, Input, Popconfirm, Select, Spin, Tag } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Check, ChevronRight, Download, Eye, FileText, Image as ImageIcon, LayoutGrid, ListChecks, Music2, Plus, Rows3, Search, Settings2, Square, Trash2, Type, Video } from "lucide-react";
+import { BookOpen, Check, ChevronRight, Download, Eye, FileText, Image as ImageIcon, LayoutGrid, ListChecks, Music2, Plus, Rows3, Search, Settings2, Square, Trash2, Type, UserRound, Video } from "lucide-react";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
@@ -379,6 +379,7 @@ function CheckMark({ checked, theme }: { checked: boolean; theme: CanvasTheme })
 // ---------------------------------------------------------------------------
 
 const ASSET_GROUPS: { kind: AssetKind; icon: typeof Square }[] = [
+    { kind: "subject", icon: UserRound },
     { kind: "image", icon: ImageIcon },
     { kind: "video", icon: Video },
     { kind: "text", icon: FileText },
@@ -387,6 +388,7 @@ const ASSET_GROUPS: { kind: AssetKind; icon: typeof Square }[] = [
 function buildInsertPayload(asset: Asset): InsertAssetPayload {
     if (asset.kind === "text") return { kind: "text", content: asset.data.content, title: asset.title };
     if (asset.kind === "video") return { kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height };
+    if (asset.kind === "subject") return { kind: "subject", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height, description: asset.data.description };
     return { kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title };
 }
 
@@ -470,6 +472,11 @@ const CanvasAssetsTab = memo(function CanvasAssetsTab({ onInsert, theme }: { onI
                 </div>
             ) : null}
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+                {groups.some((group) => group.kind === "subject") ? null : (
+                    <div className="mx-1 mb-2 rounded-lg border border-dashed px-2.5 py-2 text-[11px] leading-5 opacity-55" style={{ borderColor: theme.node.stroke, color: theme.node.text }}>
+                        {t("canvas.sidePanel.subjectEmptyHint")}
+                    </div>
+                )}
                 {groups.length ? (
                     <div className="space-y-1">
                         {groups.map((group) => {

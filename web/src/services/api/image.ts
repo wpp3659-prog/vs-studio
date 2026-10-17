@@ -1,13 +1,14 @@
-import axios from "axios";
+import axios, { type AxiosResponse } from "axios";
 
 import i18n from "@/i18n";
 import { buildApiUrl, resolveModelRequestConfig, resolveModelScript, withLocalProxy, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
 import { normalizePluginImages, runModelPlugin } from "./model-plugin";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
-import { buildImageReferencePromptText } from "@/lib/image-reference-prompt";
+import { buildImageReferencePromptText, type SubjectReferenceHint } from "@/lib/image-reference-prompt";
 import { imageToDataUrl } from "@/services/image-storage";
 import { imageSizePresets, inferMediaScale } from "@/lib/media-size";
+import { buildMidjourneyRequest, isUnsupportedMidjourneySize } from "@/lib/midjourney-request";
 import type { ReferenceImage } from "@/types/image";
 
 const apiText = (key: string, options?: Record<string, unknown>) => i18n.t(`apiErrors.${key}`, options);
@@ -95,7 +96,7 @@ type GeminiPayload = {
     promptFeedback?: { blockReason?: string };
 };
 type GeminiStreamState = { buffer: string; text: string; toolCalls: ResponseToolCall[]; error?: string };
-type RequestOptions = { signal?: AbortSignal };
+type RequestOptions = { signal?: AbortSignal; subjects?: SubjectReferenceHint[] };
 
 const IMAGE_QUALITY_VALUES = ["low", "medium", "high", "xhigh", "max"];
 const DEFAULT_IMAGE_SHORT_SIDE = 1024;
@@ -210,39 +211,225 @@ function resolveGeminiImageSize(dimensions: { width: number; height: number } | 
     return "4K";
 }
 
-function resolveImageSource(item: Record<string, unknown>) {
-    if (typeof item.b64_json === "string" && item.b64_json) {
-        return `data:image/png;base64,${item.b64_json}`;
-    }
-    if (typeof item.url === "string" && item.url) {
-        return item.url;
-    }
-    return null;
+/** 图片地址字段：这些键下的字符串即使没有图片扩展名也按图片处理（中转的 CDN 地址常常没有后缀）。 */
+const IMAGE_URL_KEYS = ["url", "image_url", "imageUrl", "image", "images", "imageUrls", "image_urls", "dataUrl", "fileUrl", "output_url", "resultUrl"];
+/** base64 字段：中转返回裸 base64 时补上 data URL 前缀。 */
+const IMAGE_BASE64_KEYS = ["b64_json", "base64", "imageBase64", "image_base64"];
+const IMAGE_TASK_POLL_INTERVAL_MS = 3000;
+const IMAGE_TASK_TIMEOUT_MS = 10 * 60_000;
+/**
+ * 部分中转（例如 xinfeng.best）支持用这个标准 Preference 头把生图改成异步任务：
+ * 立刻返回 202 + 任务 id，之后再查任务取结果。Midjourney 这类要几分钟才出图的模型
+ * 靠它绕开中转网关的读超时（实测约 75 秒就会把同步连接掐断）。
+ * 不支持该头的中转会按 RFC 7240 直接忽略，仍走原来的同步返回，因此可以无条件带上。
+ */
+const IMAGE_ASYNC_PREFERENCE = "respond-async";
+
+export function isOpenAIMidjourneyConfig(config: AiConfig) {
+    return config.apiFormat === "openai" && /(?:^|[/_\-\s])(?:mj|niji)(?:$|[/_\-\s])|midjourney/i.test(config.model.trim());
 }
 
-function parseImagePayload(payload: ImageApiResponse) {
-    if (typeof payload.code === "number" && payload.code !== 0) {
-        throw new Error(payload.msg || apiText("requestFailed"));
-    }
-    // Support data, images, and results response fields used by different APIs.
-    const imageList = payload.data
-        || (payload as Record<string, unknown>).images as Array<Record<string, unknown>> | undefined
-        || (payload as Record<string, unknown>).results as Array<Record<string, unknown>> | undefined
-        || [];
-    const images = imageList
-        .map(resolveImageSource)
-        .filter((value): value is string => Boolean(value))
-        .map((dataUrl) => ({ id: nanoid(), dataUrl }));
 
-    if (images.length === 0) {
-        // Check whether the response contains data in an unrecognized format.
-        const rawKeys = Object.keys(payload).filter((k) => k !== "code" && k !== "msg" && k !== "error");
-        throw new Error(rawKeys.length > 0
-            ? apiText("unknownImageResponse", { fields: rawKeys.join(", ") })
-            : apiText("noImageReturned"));
-    }
+function looksLikeImageSource(value: string) {
+    return /^data:image\//i.test(value) || /^blob:/i.test(value) || /^https?:\/\/\S+\.(png|jpe?g|webp|gif|avif|bmp)(\?\S*)?$/i.test(value);
+}
 
-    return images;
+/**
+ * 从中转返回里尽量挖出图片。各家字段名差异很大（data / images / results / output / artifacts /
+ * imageUrl / imageUrls…），这里按「键名 + 值形状」宽松收集，避免因为字段名不认识就丢掉已经生成好的图。
+ */
+function collectImageSources(value: unknown, sources: string[], depth = 0, permissive = false) {
+    if (depth > 6 || value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+        value.forEach((item) => collectImageSources(item, sources, depth + 1, permissive));
+        return;
+    }
+    if (typeof value === "string") {
+        if (looksLikeImageSource(value) || (permissive && /^(https?:\/\/|data:image\/|blob:)/i.test(value))) sources.push(value);
+        return;
+    }
+    if (typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    const imageCountBeforeMultiFields = sources.length;
+    for (const key of ["imageUrls", "image_urls"]) {
+        let candidate = record[key];
+        if (typeof candidate === "string") {
+            try {
+                candidate = JSON.parse(candidate);
+            } catch {
+                continue;
+            }
+        }
+        if (Array.isArray(candidate)) collectImageSources(candidate, sources, depth + 1, true);
+    }
+    const hasPreferredImageList = sources.length > imageCountBeforeMultiFields;
+    for (const [key, item] of Object.entries(record)) {
+        if (hasPreferredImageList && ["imageUrls", "image_urls", "imageUrl", "image_url"].includes(key)) continue;
+        const isImageKey = IMAGE_URL_KEYS.includes(key);
+        if (typeof item === "string") {
+            if (IMAGE_BASE64_KEYS.includes(key) && item.length > 64) sources.push(`data:image/png;base64,${item}`);
+            else if (isImageKey && /^(https?:\/\/|data:image\/|blob:)/i.test(item)) sources.push(item);
+            else if (isImageKey) {
+                // MJ 中转有时把四张图的数组再 JSON.stringify 成一个字符串，而不是直接返回数组。
+                try {
+                    collectImageSources(JSON.parse(item), sources, depth + 1, true);
+                } catch {
+                    // 普通文本或未解析的字段不是图片结果。
+                }
+            } else if (looksLikeImageSource(item)) sources.push(item);
+            continue;
+        }
+        collectImageSources(item, sources, depth + 1, isImageKey || permissive);
+    }
+}
+
+function toGeneratedImages(sources: string[]) {
+    return [...new Set(sources)].map((dataUrl) => ({ id: nanoid(), dataUrl }));
+}
+
+/** Midjourney 类中转只返回任务 ID，需要再查任务状态才能拿到图片。 */
+function readImageTaskId(payload: Record<string, unknown>) {
+    const direct = stringValue(payload.taskId) || stringValue(payload.task_id);
+    if (direct) return direct;
+    const result = payload.result;
+    if (typeof result === "string") return looksLikeImageSource(result) ? "" : result;
+    if (result && typeof result === "object") {
+        const record = result as Record<string, unknown>;
+        return stringValue(record.taskId) || stringValue(record.task_id) || stringValue(record.id);
+    }
+    return "";
+}
+
+function imageTaskStatus(payload: Record<string, unknown>) {
+    return (stringValue(payload.status) || stringValue(payload.state)).toUpperCase();
+}
+
+function imagePayloadError(payload: ImageApiResponse) {
+    const record = payload as Record<string, unknown>;
+    const upstream = readApiErrorMessage(payload) || stringValue(record.description);
+    if (upstream) return upstream;
+    const rawKeys = Object.keys(record).filter((key) => key !== "code" && key !== "msg" && key !== "error");
+    return rawKeys.length > 0 ? apiText("unknownImageResponse", { fields: rawKeys.join(", ") }) : apiText("noImageReturned");
+}
+
+/** 中转把 MJ 任务接口挂的位置不统一：有的在 /v1 下，有的直接挂在根路径，两个都试。 */
+function imageTaskUrls(config: AiConfig, taskId: string) {
+    const id = encodeURIComponent(taskId);
+    const root = config.baseUrl.trim().replace(/\/+$/, "");
+    return [aiApiUrl(config, `/mj/task/${id}/fetch`), withLocalProxy(`${root}/mj/task/${id}/fetch`)];
+}
+
+async function pollImageTask(config: AiConfig, taskId: string, options?: RequestOptions) {
+    const urls = imageTaskUrls(config, taskId);
+    const deadline = Date.now() + IMAGE_TASK_TIMEOUT_MS;
+    let activeIndex = 0;
+    for (;;) {
+        if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        let payload: Record<string, unknown> = {};
+        let lastError: unknown = null;
+        for (let index = activeIndex; index < urls.length; index += 1) {
+            try {
+                const response = await axios.get<Record<string, unknown>>(urls[index], { headers: aiHeaders(config), signal: options?.signal, timeout: 60_000 });
+                activeIndex = index;
+                payload = response.data || {};
+                lastError = null;
+                break;
+            } catch (error) {
+                lastError = error;
+            }
+        }
+        if (lastError) throw lastError;
+        const sources: string[] = [];
+        collectImageSources(payload, sources);
+        if (sources.length) return toGeneratedImages(sources);
+        const status = imageTaskStatus(payload);
+        if (status === "FAILURE" || status === "FAILED" || status === "CANCEL") {
+            throw new Error(stringValue(payload.failReason) || stringValue(payload.description) || apiText("requestFailed"));
+        }
+        if (Date.now() >= deadline) throw new Error(apiText("imageTimeout"));
+        await new Promise((resolve) => window.setTimeout(resolve, IMAGE_TASK_POLL_INTERVAL_MS));
+    }
+}
+
+/** 请求带了 Prefer: respond-async 时，中转回 202 表示「已建任务」，任务 id 在响应体里，退一步再读 Location 头。 */
+function readAsyncTaskId(response: AxiosResponse) {
+    if (response.status !== 202) return "";
+    const payload = (response.data || {}) as Record<string, unknown>;
+    const direct = stringValue(payload.id) || stringValue(payload.taskId) || stringValue(payload.task_id);
+    if (direct) return direct;
+    const location = response.headers?.location;
+    if (typeof location !== "string") return "";
+    // Location 可能是完整地址，任务 id 是最后一段。
+    return decodeURIComponent(location.split(/[?#]/)[0].split("/").filter(Boolean).pop() || "");
+}
+
+/**
+ * 异步图片任务：先查状态，完成后取结果。
+ * 路径取自中转文档：GET /v1/images/tasks/{id} 查状态，GET /v1/images/tasks/{id}/result 取结果。
+ */
+async function pollAsyncImageTask(config: AiConfig, taskId: string, options?: RequestOptions) {
+    const id = encodeURIComponent(taskId);
+    const statusUrl = aiApiUrl(config, `/images/tasks/${id}`);
+    const resultUrl = aiApiUrl(config, `/images/tasks/${id}/result`);
+    const deadline = Date.now() + IMAGE_TASK_TIMEOUT_MS;
+    for (;;) {
+        if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        const payload = await readAsyncTaskPayload(config, statusUrl, options);
+        const status = imageTaskStatus(payload);
+        if (isImageTaskFailure(status)) throw new Error(imageTaskFailureReason(payload));
+        if (isImageTaskSuccess(status)) {
+            // 文档里结果单独放在 /result，少数实现会直接塞进状态响应，取不到再回退。
+            const result = await readAsyncTaskPayload(config, resultUrl, options).catch(() => ({}) as Record<string, unknown>);
+            const sources: string[] = [];
+            collectImageSources(result, sources);
+            if (!sources.length) collectImageSources(payload, sources);
+            if (sources.length) return toGeneratedImages(sources);
+            throw new Error(imagePayloadError(payload as ImageApiResponse));
+        }
+        // 没有状态字段却已经给了图，按完成处理。
+        if (!status) {
+            const sources: string[] = [];
+            collectImageSources(payload, sources);
+            if (sources.length) return toGeneratedImages(sources);
+        }
+        if (Date.now() >= deadline) throw new Error(apiText("imageTimeout"));
+        await new Promise((resolve) => window.setTimeout(resolve, IMAGE_TASK_POLL_INTERVAL_MS));
+    }
+}
+
+/** 读异步任务接口；中转回了 202 却没有任务接口时给出明确提示。 */
+async function readAsyncTaskPayload(config: AiConfig, url: string, options?: RequestOptions) {
+    try {
+        return (await axios.get<Record<string, unknown>>(url, { headers: aiHeaders(config), signal: options?.signal, timeout: 60_000 })).data || {};
+    } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) throw new Error(apiText("imageTaskUnsupported"));
+        throw error;
+    }
+}
+
+function isImageTaskFailure(status: string) {
+    return status === "FAILURE" || status === "FAILED" || status === "CANCEL" || status === "CANCELLED";
+}
+
+function isImageTaskSuccess(status: string) {
+    return status === "SUCCESS" || status === "SUCCEEDED" || status === "COMPLETED" || status === "DONE";
+}
+
+function imageTaskFailureReason(payload: Record<string, unknown>) {
+    return readApiErrorMessage(payload) || stringValue(payload.failReason) || stringValue(payload.fail_reason) || stringValue(payload.description) || apiText("requestFailed");
+}
+
+/**
+ * 解析生图返回：先找图片，找不到再看是不是异步任务（轮询任务接口），
+ * 都没有才报错，并且优先把上游自己的说明当作错误信息，方便定位。
+ */
+async function parseImagePayload(config: AiConfig, payload: ImageApiResponse, options?: RequestOptions) {
+    const sources: string[] = [];
+    collectImageSources(payload, sources);
+    if (sources.length) return toGeneratedImages(sources);
+    const taskId = readImageTaskId(payload as Record<string, unknown>);
+    if (taskId) return pollImageTask(config, taskId, options);
+    throw new Error(imagePayloadError(payload));
 }
 
 function readApiErrorMessage(value: unknown): string {
@@ -256,8 +443,14 @@ function readApiErrorMessage(value: unknown): string {
             if (inner === value && typeof parsed === "object" && Object.keys(parsed).length === 0) return "";
             return inner;
         } catch {
+            // 中转/网关故障时经常返回整页 HTML（nginx、Cloudflare 的 502/503/504 页面），
+            // 这种页面本身没人看得懂，先尝试把状态码读出来换成正常提示。
+            const gatewayMsg = readHtmlGatewayError(value);
+            if (gatewayMsg) return gatewayMsg;
             // Detect HTML error pages.
             if (/<[a-z][\s\S]*>/i.test(value)) return apiText("htmlError", { preview: `${value.slice(0, 80)}...` });
+            // 本地代理在上游连接失败时会把 Node 的原始报错原样透传过来，这里换成可读提示。
+            if (/^fetch failed$/i.test(value.trim())) return apiText("proxyUpstreamFailed");
             return value;
         }
     }
@@ -277,10 +470,30 @@ function readApiErrorMessage(value: unknown): string {
     );
 }
 
+/**
+ * 网关故障页（nginx / Cloudflare）的 <title> 或 <h1> 里通常写着状态码，例如
+ * "<title>502 Bad Gateway</title>"。只认 5xx，避免把 Cloudflare 的 403 拦截页误报成鉴权失败。
+ */
+function readHtmlGatewayError(value: unknown) {
+    if (typeof value !== "string") return "";
+    const matched = value.match(/(?:<title>|<h1>)\s*(5\d{2})\b/i);
+    return matched ? readStatusError(Number(matched[1]), "") : "";
+}
+
 function readAxiosError(error: unknown, fallback: string) {
     if (axios.isCancel(error)) return apiText("requestCanceled");
     if (axios.isAxiosError(error)) {
         if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") return apiText("imageTimeout");
+        // 上游连一个响应都没给就断开（网关读超时、进程被杀）。这和普通网络错误不同：
+        // 请求很可能已经在对方那边执行完了，只是结果传不回来，所以单独提示。
+        if (
+            !error.response &&
+            (error.code === "ERR_EMPTY_RESPONSE" ||
+                error.code === "ECONNRESET" ||
+                /socket hang up|empty response/i.test(error.message || ""))
+        ) {
+            return apiText("upstreamClosed");
+        }
         if (!error.response && error.code === "ERR_NETWORK") return apiText("requestFailed");
         const responseData = error.response?.data;
         // Prefer the API error from the response body.
@@ -308,6 +521,35 @@ function readStatusError(status: number | undefined, fallback: string) {
 function withSystemPrompt(config: AiConfig, prompt: string) {
     const systemPrompt = config.systemPrompt.trim();
     return systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+}
+
+/**
+ * 很多模型/中转会忽略 size 参数，尤其带参考图的编辑请求会直接沿用参考图的比例。
+ * 这里把用户选的画幅再写进系统提示词，让「选的尺寸」真正生效；size 为 auto 时不加任何约束。
+ */
+function withImageSizeInstruction(config: AiConfig) {
+    const directive = imageSizeDirective(config.size);
+    if (!directive) return config;
+    return { ...config, systemPrompt: [config.systemPrompt.trim(), directive].filter(Boolean).join("\n\n") };
+}
+
+function imageSizeDirective(size: string) {
+    const value = size.trim();
+    if (!value || value.toLowerCase() === "auto") return "";
+    const dimensions = parseImageDimensions(value) || (value.includes(":") ? parseRatioValue(value) : null);
+    if (!dimensions) return "";
+    const ratio = dimensions.width / dimensions.height;
+    const orientation = Math.abs(ratio - 1) <= 0.05 ? "方形构图" : ratio > 1 ? "横向构图，宽大于高" : "竖向构图，高大于宽";
+    return `输出画幅固定为 ${simplifiedRatio(dimensions.width, dimensions.height)}（${orientation}），不要改变画面比例。`;
+}
+
+function simplifiedRatio(width: number, height: number) {
+    const divisor = greatestCommonDivisor(width, height) || 1;
+    return `${width / divisor}:${height / divisor}`;
+}
+
+function greatestCommonDivisor(a: number, b: number): number {
+    return b ? greatestCommonDivisor(b, a % b) : a;
 }
 
 function aiApiUrl(config: AiConfig, path: string) {
@@ -423,7 +665,8 @@ async function readFetchError(response: Response, fallback: string) {
     try {
         return responseErrorMessage(JSON.parse(text)) || readStatusError(response.status, fallback);
     } catch {
-        return text.slice(0, 300) || readStatusError(response.status, fallback);
+        // 非 JSON 响应：网关 HTML 故障页先换算成状态码提示，其余情况截断后原样给出。
+        return readHtmlGatewayError(text) || text.slice(0, 300) || readStatusError(response.status, fallback);
     }
 }
 
@@ -692,7 +935,7 @@ function parseGeminiImagePayload(payload: GeminiPayload) {
 }
 
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
-    const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
+    const requestConfig = withImageSizeInstruction(resolveModelRequestConfig(config, config.model || config.imageModel));
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const script = resolveModelScript(config, config.model || config.imageModel);
     if (script) {
@@ -722,29 +965,40 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
         }
     }
     const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(config.size);
+    const isMidjourney = isOpenAIMidjourneyConfig(requestConfig);
+    if (isMidjourney && isUnsupportedMidjourneySize(requestConfig.size)) throw new Error(apiText("midjourney4kUnsupported"));
+    const midjourneyRequest = isMidjourney ? buildMidjourneyRequest(requestConfig.size, config.quality, n, prompt) : undefined;
+    const requestSize = isMidjourney ? undefined : resolveRequestSize(config.size);
     const background = normalizeBackground(config.background);
     try {
         const response = await axios.post<ImageApiResponse>(
             aiApiUrl(requestConfig, "/images/generations"),
+            isMidjourney
+                ? {
+                      model: requestConfig.model,
+                      prompt: withSystemPrompt(requestConfig, midjourneyRequest?.prompt ?? prompt),
+                      ...(midjourneyRequest?.params || {}),
+                  }
+                : {
+                      model: requestConfig.model,
+                      prompt: withSystemPrompt(requestConfig, prompt),
+                      n,
+                      ...(quality ? { quality } : {}),
+                      ...(requestSize ? { size: requestSize } : {}),
+                      ...(background ? { background } : {}),
+                      // gpt-image models reject response_format; they always return b64.
+                      ...(/gpt-image/.test(requestConfig.model) ? {} : { response_format: "b64_json" }),
+                      output_format: IMAGE_OUTPUT_FORMAT,
+                  },
             {
-                model: requestConfig.model,
-                prompt: withSystemPrompt(requestConfig, prompt),
-                n,
-                ...(quality ? { quality } : {}),
-                ...(requestSize ? { size: requestSize } : {}),
-                ...(background ? { background } : {}),
-                // gpt-image models reject response_format; they always return b64.
-                ...(/gpt-image/.test(requestConfig.model) ? {} : { response_format: "b64_json" }),
-                output_format: IMAGE_OUTPUT_FORMAT,
-            },
-            {
-                headers: aiHeaders(requestConfig, "application/json"),
+                headers: { ...aiHeaders(requestConfig, "application/json"), Prefer: IMAGE_ASYNC_PREFERENCE },
                 signal: options?.signal,
                 timeout: IMAGE_REQUEST_TIMEOUT_MS,
             },
         );
-        const images = await parseImagePayload(response.data);
+        const asyncTaskId = readAsyncTaskId(response);
+        if (asyncTaskId) return pollAsyncImageTask(requestConfig, asyncTaskId, options);
+        const images = await parseImagePayload(requestConfig, response.data, options);
         return images;
     } catch (error) {
         throw new Error(readAxiosError(error, apiText("requestFailed")));
@@ -752,9 +1006,9 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
 }
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], options?: RequestOptions) {
-    const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
+    const requestConfig = withImageSizeInstruction(resolveModelRequestConfig(config, config.model || config.imageModel));
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
-    const requestPrompt = buildImageReferencePromptText(prompt, references);
+    const requestPrompt = buildImageReferencePromptText(prompt, references, options?.subjects);
     const script = resolveModelScript(config, config.model || config.imageModel);
     if (script) {
         const quality = normalizeQuality(config.quality);
@@ -785,33 +1039,49 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     }
 
     const quality = normalizeQuality(config.quality);
-    const requestSize = resolveRequestSize(config.size);
+    const isMidjourney = isOpenAIMidjourneyConfig(requestConfig);
+    if (isMidjourney && isUnsupportedMidjourneySize(requestConfig.size)) throw new Error(apiText("midjourney4kUnsupported"));
+    const midjourneyRequest = isMidjourney ? buildMidjourneyRequest(requestConfig.size, config.quality, n, requestPrompt) : undefined;
+    const requestSize = isMidjourney ? undefined : resolveRequestSize(config.size);
     const background = normalizeBackground(config.background);
     const formData = new FormData();
     formData.set("model", requestConfig.model);
-    formData.set("prompt", withSystemPrompt(requestConfig, requestPrompt));
-    formData.set("n", String(n));
-    // gpt-image models reject response_format; they always return b64.
-    if (!/gpt-image/.test(requestConfig.model)) {
-        formData.set("response_format", "b64_json");
-    }
-    formData.set("output_format", IMAGE_OUTPUT_FORMAT);
-    if (quality) {
-        formData.set("quality", quality);
-    }
-    if (requestSize) {
-        formData.set("size", requestSize);
-    }
-    if (background) {
-        formData.set("background", background);
+    formData.set("prompt", withSystemPrompt(requestConfig, midjourneyRequest?.prompt ?? requestPrompt));
+    if (isMidjourney) {
+        for (const [key, value] of Object.entries(midjourneyRequest?.params || {})) {
+            if (value === true) formData.set(key, "true");
+            else if (value !== false) formData.set(key, String(value));
+        }
+    } else {
+        formData.set("n", String(n));
+        // gpt-image models reject response_format; they always return b64.
+        if (!/gpt-image/.test(requestConfig.model)) {
+            formData.set("response_format", "b64_json");
+        }
+        formData.set("output_format", IMAGE_OUTPUT_FORMAT);
+        if (quality) {
+            formData.set("quality", quality);
+        }
+        if (requestSize) {
+            formData.set("size", requestSize);
+        }
+        if (background) {
+            formData.set("background", background);
+        }
     }
     const files = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     const imageField = files.length > 1 ? "image[]" : "image";
     files.forEach((file) => formData.append(imageField, file));
 
     try {
-        const response = await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { headers: aiHeaders(requestConfig), signal: options?.signal, timeout: IMAGE_REQUEST_TIMEOUT_MS });
-        const images = await parseImagePayload(response.data);
+        const response = await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, {
+            headers: { ...aiHeaders(requestConfig), Prefer: IMAGE_ASYNC_PREFERENCE },
+            signal: options?.signal,
+            timeout: IMAGE_REQUEST_TIMEOUT_MS,
+        });
+        const asyncTaskId = readAsyncTaskId(response);
+        if (asyncTaskId) return pollAsyncImageTask(requestConfig, asyncTaskId, options);
+        const images = await parseImagePayload(requestConfig, response.data, options);
         return images;
     } catch (error) {
         throw new Error(readAxiosError(error, apiText("requestFailed")));

@@ -16,7 +16,7 @@ import { nanoid } from "nanoid";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
-import { useAssetStore } from "@/stores/use-asset-store";
+import { useAssetStore, type SubjectAsset, type SubjectRole } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { cropDataUrl, splitDataUrl, upscaleDataUrl } from "@/lib/canvas/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "@/lib/canvas/canvas-node-size";
@@ -277,6 +277,7 @@ function VsStudioPage() {
     const [upscaleNodeId, setUpscaleNodeId] = useState<string | null>(null);
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
+    const [subjectNodeId, setSubjectNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [hoverPreviewNodeId, setHoverPreviewNodeId] = useState<string | null>(null);
     const [previewImageId, setPreviewImageId] = useState<string | null>(null);
@@ -753,6 +754,7 @@ function VsStudioPage() {
     const upscaleNode = upscaleNodeId ? nodeById.get(upscaleNodeId) || null : null;
     const superResolveNode = superResolveNodeId ? nodeById.get(superResolveNodeId) || null : null;
     const angleNode = angleNodeId ? nodeById.get(angleNodeId) || null : null;
+    const subjectNode = subjectNodeId ? nodeById.get(subjectNodeId) || null : null;
     const contextMenuNode = contextMenu?.type === "node" ? nodeById.get(contextMenu.nodeId) || null : null;
     const previewNode = previewNodeId ? nodeById.get(previewNodeId) || null : null;
     const previewContent = previewImageId ? previewNode?.metadata?.images?.find((image) => image.id === previewImageId)?.content : previewNode?.metadata?.content;
@@ -1932,6 +1934,36 @@ function VsStudioPage() {
         [addAsset, message, t],
     );
 
+    const saveNodeSubject = useCallback(
+        async (node: CanvasNodeData, role: SubjectRole) => {
+            if (node.type !== CanvasNodeType.Image || !node.metadata?.content) return message.error(t("canvas.projectPage.noImageToSave"));
+            const title = (node.title || node.metadata?.prompt || t("canvas.projectPage.canvasImage")).slice(0, 40);
+            const subject = addAsset({
+                kind: "subject",
+                title,
+                coverUrl: node.metadata.content,
+                tags: [],
+                source: "Canvas",
+                note: node.metadata?.prompt,
+                data: {
+                    role,
+                    dataUrl: node.metadata.storageKey ? "" : node.metadata.content,
+                    storageKey: node.metadata.storageKey,
+                    width: node.metadata.naturalWidth || node.width,
+                    height: node.metadata.naturalHeight || node.height,
+                    bytes: node.metadata.bytes || 0,
+                    mimeType: node.metadata.mimeType || "image/png",
+                    description: node.metadata?.prompt?.slice(0, 80),
+                },
+                metadata: { source: "canvas", nodeId: node.id },
+            });
+            // 存主体后直接开一个参考连线,下一次生成立刻能用
+            setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: node.id, toNodeId: subject }]);
+            message.success(t("canvas.projectPage.subjectSaved", { name: title }));
+        },
+        [addAsset, message, t],
+    );
+
     const createImageReversePromptNodes = useCallback(
         (node: CanvasNodeData) => {
             if (node.type !== CanvasNodeType.Image || !node.metadata?.content) {
@@ -2144,6 +2176,29 @@ function VsStudioPage() {
         setDialogNodeId(childId);
     }, []);
 
+/** 把参考图里来自「主体」的那些挑出来，生成时会额外强调「别换脸、别换景」 */
+function collectSubjectHints(references: ReferenceImage[], connections: CanvasConnection[], nodes: CanvasNodeData[]) {
+    if (!references.length) return [];
+    const subjects = useAssetStore.getState().assets.filter((asset) => asset.kind === "subject");
+    if (!subjects.length) return [];
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    // 主体在生成时会被插成图片节点，节点的 prompt 就是主体标题，用它反查主体
+    const subjectByTitle = new Map<string, SubjectAsset>();
+    for (const asset of subjects) if (asset.kind === "subject") subjectByTitle.set(asset.title, asset);
+    const hints: { index: number; role: "character" | "scene" | "prop"; title: string }[] = [];
+    references.forEach((reference, index) => {
+        const direct = subjects.find((asset) => asset.id === reference.id && asset.kind === "subject");
+        if (direct && direct.kind === "subject") {
+            hints.push({ index, role: direct.data.role, title: direct.title });
+            return;
+        }
+        const sourceTitle = nodeById.get(reference.id)?.title || reference.name.replace(/\.png$/i, "");
+        const asset = subjectByTitle.get(sourceTitle);
+        if (asset) hints.push({ index, role: asset.data.role, title: asset.title });
+    });
+    return hints;
+}
+
     const generateAngleMatrix = useCallback(
         async (
             node: CanvasNodeData,
@@ -2152,7 +2207,8 @@ function VsStudioPage() {
             generationConfig: ReturnType<typeof buildGenerationConfig>,
             sourceRef: ReferenceImage,
         ) => {
-            const layout = ANGLE_MATRIX_LAYOUTS[params.matrix || "nine"];            const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
+            const layout = ANGLE_MATRIX_LAYOUTS[params.matrix || "nine"];
+            const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
             const gap = 48;
             const startX = node.position.x + node.width + 96;
             const startY = node.position.y;
@@ -2498,7 +2554,7 @@ function VsStudioPage() {
                     const context = await hydrateNodeGenerationContext(buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, fullPrompt));
                     const refs = context.referenceImages;
                     const items = refs.length
-                        ? await requestEdit({ ...generationConfig, count: "1" }, context.prompt, refs, { signal: controller.signal })
+                        ? await requestEdit({ ...generationConfig, count: "1" }, context.prompt, refs, { signal: controller.signal, subjects: collectSubjectHints(refs, connectionsRef.current, nodesRef.current) })
                         : await requestGeneration({ ...generationConfig, count: "1" }, context.prompt, { signal: controller.signal });
                     // 上游可能一次返回多张（如 MJ 一次返回 4 张）：全部写入节点，画布显示上游实际返回的张数。
                     const uploadedImages = await Promise.all(items.map((entry) => uploadImage(entry.dataUrl, { signal: controller.signal })));
@@ -2557,6 +2613,7 @@ function VsStudioPage() {
                             ? [{ id: sourceNode.id, name: `${sourceNode.title || sourceNode.id}.png`, type: sourceNode.metadata.mimeType || "image/png", dataUrl: sourceNode.metadata.content, storageKey: sourceNode.metadata.storageKey }]
                             : [];
                     const referenceImages = [...new Map([...sourceReference, ...generationContext.referenceImages].map((image) => [image.id, image])).values()];
+                    const subjectHints = collectSubjectHints(referenceImages, connectionsRef.current, nodesRef.current);
                     const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
                     // OpenAI-compatible MJ usually returns its four-image set from one request; do not submit one paid job per requested canvas slot.
                     const isMidjourneyGeneration = isOpenAIMidjourneyConfig(generationConfig);
@@ -2638,7 +2695,7 @@ function VsStudioPage() {
                         imageIds.map(async (imageId) => {
                             try {
                                 const items = referenceImages.length
-                                    ? await requestEdit({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, { signal: controller.signal })
+                                    ? await requestEdit({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, { signal: controller.signal, subjects: subjectHints })
                                     : await requestGeneration({ ...generationConfig, count: "1" }, effectivePrompt, { signal: controller.signal });
                                 const image = items[0];
                                 if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
@@ -3023,7 +3080,7 @@ function VsStudioPage() {
                 }
 
                 const items = useReferenceImages
-                    ? await requestEdit(generationConfig, prompt, retryImages, { signal: controller.signal })
+                    ? await requestEdit(generationConfig, prompt, retryImages, { signal: controller.signal, subjects: collectSubjectHints(retryImages, connectionsRef.current, nodesRef.current) })
                     : await requestGeneration(generationConfig, prompt, { signal: controller.signal });
                 const image = items[0];
                 if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
@@ -3160,7 +3217,7 @@ function VsStudioPage() {
     );
 
     const insertAssistantImage = useCallback(
-        async (image: CanvasAssistantImage) => {
+        async (image: CanvasAssistantImage, options?: { linkToNodeId?: string; connectFromNodeId?: string }) => {
             const storedImage = image.storageKey ? { url: image.dataUrl, storageKey: image.storageKey, width: 1, height: 1, bytes: 0, mimeType: "image/png" } : await uploadImage(image.dataUrl);
             await ensureImagePreview(storedImage.storageKey);
             const meta = storedImage.width === 1 && storedImage.height === 1 ? await readImageMeta(storedImage.url) : storedImage;
@@ -3178,6 +3235,9 @@ function VsStudioPage() {
             };
 
             setNodes((prev) => [...prev, node]);
+            // 主体插入时顺手连到正在编辑的节点,少一步手动连线
+            if (options?.linkToNodeId) setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: id, toNodeId: options.linkToNodeId! }]);
+            if (options?.connectFromNodeId) setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: options.connectFromNodeId!, toNodeId: id }]);
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
             setDialogNodeId(id);
@@ -3201,7 +3261,7 @@ function VsStudioPage() {
     );
 
     const handleAssetInsert = useCallback(
-        (payload: InsertAssetPayload) => {
+        async (payload: InsertAssetPayload) => {
             if (payload.kind === "text") {
                 insertAssistantText(payload.content, payload.title);
             } else if (payload.kind === "video") {
@@ -3222,12 +3282,22 @@ function VsStudioPage() {
                     },
                 ]);
                 setSelectedNodeIds(new Set([id]));
+            } else if (payload.kind === "subject") {
+                // 主体插入：优先接到当前正在编辑的节点当参考图,否则落到画布中间
+                const targetId = dialogNodeId && dialogNodeId !== angleNodeId ? dialogNodeId : null;
+                const target = targetId ? nodesRef.current.find((item) => item.id === targetId) : undefined;
+                const linkable = target && target.type !== CanvasNodeType.Group;
+                await insertAssistantImage(
+                    { id: `subject-${Date.now()}`, prompt: payload.title, dataUrl: payload.dataUrl, storageKey: payload.storageKey },
+                    { linkToNodeId: linkable ? target!.id : undefined, connectFromNodeId: !linkable && targetId ? targetId : undefined },
+                );
+                if (linkable) message.success(t("canvas.assetPicker.subjectLinked", { name: payload.title, target: target!.title || t(`canvas.nodeTypes.${target!.type}`) }));
             } else {
                 insertAssistantImage({ id: `asset-${Date.now()}`, prompt: payload.title, dataUrl: payload.dataUrl, storageKey: payload.storageKey });
             }
             setAssetPickerOpen(false);
         },
-        [insertAssistantImage, insertAssistantText, screenToCanvas, size.height, size.width],
+        [dialogNodeId, angleNodeId, insertAssistantImage, insertAssistantText, message, screenToCanvas, size.height, size.width, t],
     );
 
     // Memoize every callback and render function passed to CanvasNode.
@@ -3533,6 +3603,7 @@ function VsStudioPage() {
                     onUpload={(node) => handleUploadRequest(node.id)}
                     onDownload={downloadNodeImage}
                     onSaveAsset={(node) => void saveNodeAsset(node)}
+                    onSaveSubject={(node) => setSubjectNodeId(node.id)}
                     onMaskEdit={(node) => setMaskEditNodeId(node.id)}
                     onCrop={(node) => setCropNodeId(node.id)}
                     onSplit={(node) => setSplitNodeId(node.id)}
@@ -3646,6 +3717,27 @@ function VsStudioPage() {
                 </Modal>
 
                 {angleNode?.metadata?.content ? <CanvasNodeAngleDialog dataUrl={angleNode.metadata.content} open={Boolean(angleNode)} onClose={() => setAngleNodeId(null)} onConfirm={(params) => void generateAngleNode(angleNode!, params)} /> : null}
+                <Modal title={t("canvas.projectPage.saveSubjectTitle")} open={Boolean(subjectNode)} onCancel={() => setSubjectNodeId(null)} footer={null} centered width={520} destroyOnHidden>
+                    <div className="space-y-4">
+                        <p className="text-sm opacity-60">{t("canvas.projectPage.saveSubjectDescription")}</p>
+                        <div className="grid gap-2">
+                            {(["character", "scene", "prop"] as SubjectRole[]).map((role) => (
+                                <button
+                                    key={role}
+                                    type="button"
+                                    className="flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 text-left transition hover:border-stone-400 dark:hover:border-stone-500"
+                                    onClick={() => {
+                                        if (subjectNode) void saveNodeSubject(subjectNode, role);
+                                        setSubjectNodeId(null);
+                                    }}
+                                >
+                                    <span className="font-medium">{t(`assets.subjectRoles.${role}`)}</span>
+                                    <span className="max-w-[300px] text-xs opacity-55">{t(`assets.subjectRoleHints.${role}`)}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </Modal>
 
                 <Modal
                     title={t("canvas.projectPage.imageDetails")}

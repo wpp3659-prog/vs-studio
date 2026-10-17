@@ -5,6 +5,12 @@ description: Implemented changes that still need manual verification
 
 # Pending Tests
 
+- Subject library: on a generated character image, click "Save subject" in the node toolbar and pick "Character". The asset panel should then show a "Subject" group at the top containing it. Clicking the subject inserts an image node and auto-connects it to the node currently being edited, with a toast confirming the reference. The same subject should be available on every canvas. It should also appear on the assets page with preview and export support.
+
+- Subject consistency: attach a character subject to an image node and write only the action (e.g. "she pushes the door open into the rain"). The result should keep the subject's face and outfit, and the outgoing prompt should contain the "locked subjects must stay identical" paragraph. Without any subject attached, that paragraph must not appear.
+
+- Angle matrix: on an image node, open "Multi-angle" and switch the top mode from "Single" to "3x3 grid". The preview should turn into a 3x3 thumbnail grid that reacts to camera distance and wide angle. "Generate 9 angles" should produce nine differently oriented images on the right of the source node, then group them into a group named "Angle matrix · 9 angles" whose frame hugs the actual image sizes; the group should drag as a whole. "Three views" and "12 angles" should produce 3 and 12 images. The single-angle mode must behave exactly as before.
+
 - Character turnaround plugin: create a "Character Turnaround" node from the plugin panel, describe the character, and click generate. It should return a single sheet showing front, side and back views of the same character. "Four views" and "Expression grid" should return four angles and a 3x3 expression sheet. When an upstream character image is connected, the sheet should keep that character's likeness. The "copy to canvas" toolbar action should turn the sheet into a standalone image node usable as a reference.
 
 - Story push plugin: enter one scene, pick "Story four frames", and run it. The result should be a table with shot size, time point,画面 content, camera movement and an English prompt per frame, with consistent character description across frames. "Before / after" should return the three-second-before, current and three-second-after frames; "Shot flow" should return a medium establishing shot, a close-up and a detail shot.
