@@ -306,6 +306,30 @@
             "entry": "character-bible.js"
         },
         {
+            "id": "character-sheet",
+            "name": "角色三视图",
+            "version": "1.0.0",
+            "description": "一次生成正面/侧面/背面角色设定图，支持四视图与表情九宫格，作为跨镜头一致性锚点",
+            "icon": "🧍",
+            "entry": "character-sheet.js"
+        },
+        {
+            "id": "story-push",
+            "name": "剧情推演",
+            "version": "1.0.0",
+            "description": "一个镜头推演出四格剧情、前后画面或三镜流程，先排走位再生成，减少抽卡",
+            "icon": "🎞",
+            "entry": "story-push.js"
+        },
+        {
+            "id": "shot-teardown",
+            "name": "拉片复刻",
+            "version": "1.0.0",
+            "description": "参考视频抽帧逐帧拆解，输出结构分析与同结构复刻分镜表",
+            "icon": "🎯",
+            "entry": "shot-teardown.js"
+        },
+        {
             "id": "scene-bible",
             "name": "场景圣经",
             "version": "1.1.0",
