@@ -193,6 +193,8 @@ export type CanvasPluginAi = {
     generateImage: (prompt: string, options?: GenerateImageOptions) => Promise<GenerateImageResult>;
     generateVideo: (prompt: string, options?: GenerateVideoOptions) => Promise<GenerateVideoResult>;
     generateText: (prompt: string, options?: GenerateTextOptions) => Promise<GenerateTextResult>;
+    // 多图问答:把若干张图(URL 或 dataURL)一起交给视觉文本模型,用于逐帧拆解等场景
+    analyzeImages: (prompt: string, images: string[], options?: GenerateTextOptions) => Promise<GenerateTextResult>;
     // 列出某能力下用户已配置的可选模型;不传能力则返回全部
     listModels: (capability?: ModelCapability) => ModelOption[];
     // 该能力当前默认选中的模型 value(可作为下拉框初始值)

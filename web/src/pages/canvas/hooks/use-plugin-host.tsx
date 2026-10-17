@@ -96,6 +96,15 @@ export function usePluginHost(params: PluginHostParams) {
                 return { url: file.url, mimeType: file.mimeType, width: file.width, height: file.height, durationMs: file.durationMs };
             },
             generateText: (prompt, options) => generateTextWith(prompt, options),
+            // Multi-image question: reuse the same text model but attach images so plugins can analyze frames.
+            analyzeImages: async (prompt, images, options) => {
+                const config = { ...buildGenerationConfig(effectiveConfig, undefined, "text"), ...(options?.model ? { model: options.model } : {}) };
+                ensureReady(config);
+                const content: AiTextMessage["content"] = [{ type: "text", text: prompt }, ...images.filter(Boolean).map((url) => ({ type: "image_url" as const, image_url: { url } }))];
+                const messages: AiTextMessage[] = [...(options?.system ? [{ role: "system" as const, content: options.system }] : []), { role: "user", content }];
+                const text = await requestImageQuestion(config, messages, (delta) => options?.onDelta?.(delta), { signal: options?.signal });
+                return { text };
+            },
             // List configured models for a capability; labels use the model name without the channel prefix.
             listModels: (capability) => selectableModelsByCapability(effectiveConfig, capability as ModelCapability | undefined).map((value) => ({ value, label: decodeChannelModel(value)?.model || value })),
             defaultModel: (capability) => buildGenerationConfig(effectiveConfig, undefined, capability).model,

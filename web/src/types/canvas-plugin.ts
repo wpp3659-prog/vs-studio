@@ -23,6 +23,8 @@ export type CanvasPluginAi = {
     generateImage: (prompt: string, options?: GenerateImageOptions) => Promise<GenerateImageResult>;
     generateVideo: (prompt: string, options?: GenerateVideoOptions) => Promise<GenerateVideoResult>;
     generateText: (prompt: string, options?: GenerateTextOptions) => Promise<GenerateTextResult>;
+    // Ask a vision-capable text model about images (accepts URLs and data URLs), used for frame-by-frame analysis.
+    analyzeImages: (prompt: string, images: string[], options?: GenerateTextOptions) => Promise<GenerateTextResult>;
     listModels: (capability?: PluginModelCapability) => ModelOption[];
     defaultModel: (capability: PluginModelCapability) => string;
 };
