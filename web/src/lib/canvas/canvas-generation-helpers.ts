@@ -127,23 +127,34 @@ export function hasResumableVideoTask(node: CanvasNodeData) {
     return node.type === CanvasNodeType.Video && Boolean(node.metadata?.videoTaskId) && !node.metadata?.content;
 }
 
+/**
+ * 页面在「上游已出图、正在把整张图写进本地」的窗口里被刷新时，节点还是 loading。
+ * 这时直接判成「生成已中断」会让用户以为上游失败（大图最容易撞上，实际图已经出来了）。
+ * 这里把这些节点标成可重试的错误，并给出「保存阶段被打断」的说明。
+ */
 export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
-    return nodes.map((node) =>
-        node.metadata?.status === "loading"
-            ? hasResumableVideoTask(node)
-                ? node
-                : {
-                      ...node,
-                      metadata: {
-                          ...node.metadata,
-                          status: "error" as const,
-                          errorDetails: i18n.t("canvas.generation.interrupted"),
-                          images: node.metadata.images?.map((image) => (image.status === "loading" ? { ...image, status: "error" as const, errorDetails: i18n.t("canvas.generation.interrupted") } : image)),
-                          texts: node.metadata.texts?.map((text) => (text.status === "loading" ? { ...text, status: "error" as const, errorDetails: i18n.t("canvas.generation.interrupted") } : text)),
-                      },
-                  }
-            : node,
-    );
+    return nodes.map((node) => {
+        if (node.metadata?.status !== "loading" || hasResumableVideoTask(node)) return node;
+        const saving = node.type === CanvasNodeType.Image && isSavingImages(node);
+        const reason = i18n.t(saving ? "canvas.generation.imageSaveInterrupted" : "canvas.generation.interrupted");
+        return {
+            ...node,
+            metadata: {
+                ...node.metadata,
+                status: "error" as const,
+                errorDetails: reason,
+                images: node.metadata.images?.map((image) => (image.status === "loading" ? { ...image, status: "error" as const, errorDetails: reason } : image)),
+                texts: node.metadata.texts?.map((text) => (text.status === "loading" ? { ...text, status: "error" as const, errorDetails: reason } : text)),
+            },
+        };
+    });
+}
+
+/** 槽位里已经有图（临时地址或已落盘的 key），说明只差最后一步保存。 */
+function isSavingImages(node: CanvasNodeData) {
+    const images = node.metadata?.images || [];
+    if (images.length) return images.every((image) => Boolean(image.content) && image.status !== "error");
+    return Boolean(node.metadata?.content);
 }
 
 export function isGenerationCanceled(error: unknown) {

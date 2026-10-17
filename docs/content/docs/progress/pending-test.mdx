@@ -5,6 +5,9 @@ description: Implemented changes that still need manual verification
 
 # Pending Tests
 
+- Large images: generate an image through a channel that returns the original 20 MB+ file (or drop such a file onto the canvas). The node should show the image once generation finishes instead of "Generation was interrupted by a page refresh." Zooming the node should stay sharp (the full-size image is kept, not just the thumbnail), and the image should still be there after reloading the page and be downloadable.
+- Refresh during large-image save: generate a large image and reload immediately. If "The image was generated, but the page refreshed while the large file was still being saved" appears, the save really was cut off — regenerating is enough. Otherwise the image should just appear with no red text.
+
 - Subject library: on a generated character image, click "Save subject" in the node toolbar and pick "Character". The asset panel should then show a "Subject" group at the top containing it. Clicking the subject inserts an image node and auto-connects it to the node currently being edited, with a toast confirming the reference. The same subject should be available on every canvas. It should also appear on the assets page with preview and export support.
 
 - Subject consistency: attach a character subject to an image node and write only the action (e.g. "she pushes the door open into the rain"). The result should keep the subject's face and outfit, and the outgoing prompt should contain the "locked subjects must stay identical" paragraph. Without any subject attached, that paragraph must not appear.

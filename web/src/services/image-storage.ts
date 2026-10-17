@@ -27,9 +27,16 @@ let previewQueue: Promise<unknown> = Promise.resolve();
 const IMAGE_PREVIEW_VERSION = 1;
 const IMAGE_DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
 const IMAGE_REMOTE_LOAD_TIMEOUT_MS = 10 * 60_000;
-const IMAGE_DECODE_TIMEOUT_MS = 10_000;
+/**
+ * 解码超时只兜「解不出来」这种情况，不能当成性能预算。
+ * 20MB 以上的大图（尤其手机/相机原图）首次解码要十几秒，以前给的 10 秒会把
+ * 已经成功下载的图当成失败丢掉，体感就是「上游出图了但画布上没有」。
+ */
+const IMAGE_DECODE_TIMEOUT_MS = 90_000;
 const IMAGE_RESPONSE_ERROR = "ImageResponseError";
 const IMAGE_TIMEOUT_ERROR = "ImageTimeoutError";
+/** 超大图先落盘保住，缩略图放到后台补，别让它拖住生成流程。 */
+const IMAGE_PREVIEW_INLINE_MAX_BYTES = 8 * 1024 * 1024;
 
 type StoredImagePreview = { version: number; blob?: Blob };
 
@@ -38,11 +45,18 @@ type ImageReadOptions = { signal?: AbortSignal };
 export async function uploadImage(input: string | Blob, options?: ImageReadOptions): Promise<UploadedImage> {
     if (typeof input !== "string") return storeImage(input, options);
 
+    if (typeof input === "string" && /^blob:/i.test(input)) return keepRemoteImage(input, options);
+    // 图片本身就是 data URL（中转直接回 base64 时很常见，大图能有 30~40MB 字符串）：
+    // 别绕 fetch，直接按二进制存，省一次整串拷贝和解析。
+    if (/^data:[^,]*,/i.test(input)) return storeImage(await dataUrlToBlob(input), options);
+
     let blob: Blob;
     try {
         blob = await fetchImageBlob(input, options);
     } catch (error) {
-        if (options?.signal?.aborted || isNamedError(error, IMAGE_RESPONSE_ERROR) || isNamedError(error, IMAGE_TIMEOUT_ERROR) || !/^https?:\/\//i.test(input)) throw error;
+        // 远端地址用 fetch 失败（CORS 拦截或返回非 2xx）时，再用 <img> 试一次：
+        // 图片标签不受 CORS 限制，很多图床/中转只在 fetch 场景下失败。
+        if (options?.signal?.aborted || isNamedError(error, IMAGE_TIMEOUT_ERROR) || !/^https?:\/\//i.test(input)) throw error;
         const meta = await loadImageMeta(input, options, IMAGE_REMOTE_LOAD_TIMEOUT_MS);
         if (!meta) throw error;
         return { url: input, width: meta.width, height: meta.height, bytes: 0, mimeType: "" };
@@ -50,22 +64,43 @@ export async function uploadImage(input: string | Blob, options?: ImageReadOptio
     return storeImage(blob, options);
 }
 
+/** 已经是临时地址（blob:）时不要去 fetch：本地 blob 可能已经被别处 revoke。 */
+async function keepRemoteImage(url: string, options?: ImageReadOptions): Promise<UploadedImage> {
+    const meta = await readImageMetaSafely(url, options);
+    if (options?.signal?.aborted) throw abortReason(options.signal);
+    return { url, width: meta?.width || 0, height: meta?.height || 0, bytes: 0, mimeType: "" };
+}
+
 async function storeImage(blob: Blob, options?: ImageReadOptions): Promise<UploadedImage> {
     const storageKey = `image:${nanoid()}`;
     const url = URL.createObjectURL(blob);
-    try {
-        const meta = await loadImageMeta(url, options);
-        if (!meta) throw new Error(i18n.t("common.imageReadFailed"));
-        throwIfAborted(options?.signal);
-        await store.setItem(storageKey, blob);
-        throwIfAborted(options?.signal);
-        objectUrls.set(storageKey, url);
-        await storeImagePreview(storageKey, blob);
-        return { url, storageKey, width: meta.width, height: meta.height, bytes: blob.size, mimeType: blob.type.startsWith("image/") ? blob.type : "" };
-    } catch (error) {
+    const fallback = { url, width: 0, height: 0, bytes: blob.size, mimeType: blob.type.startsWith("image/") ? blob.type : "" };
+    // 尺寸读不出来不是致命错误：图已经在手上，节点哪怕只在界面上显示这一次也不能丢。
+    const meta = (await readImageMetaSafely(url, options)) || {};
+    if (options?.signal?.aborted) {
         URL.revokeObjectURL(url);
-        await store.removeItem(storageKey).catch(() => undefined);
-        throw error;
+        throw abortReason(options.signal);
+    }
+    try {
+        await store.setItem(storageKey, blob);
+        objectUrls.set(storageKey, url);
+    } catch {
+        // 写 IndexedDB 失败（配额不够、浏览器限制等）时保留当前会话的临时地址，
+        // 至少刷新前能正常显示；节点数据里 storageKey 留空，刷新后会如实提示读不到图。
+        return { ...fallback, ...meta };
+    }
+    if (blob.size > IMAGE_PREVIEW_INLINE_MAX_BYTES) queueImagePreview(storageKey);
+    else await storeImagePreview(storageKey, blob);
+    return { ...fallback, ...meta, storageKey };
+}
+
+async function readImageMetaSafely(url: string, options?: ImageReadOptions) {
+    try {
+        return await loadImageMeta(url, options);
+    } catch {
+        // 只有「用户取消」需要冒泡；解码超时/失败按无尺寸处理，图照样保留。
+        if (options?.signal?.aborted) throw abortReason(options.signal);
+        return null;
     }
 }
 
@@ -117,14 +152,23 @@ function loadImageMeta(url: string, options?: ImageReadOptions, timeoutMs = IMAG
         };
         const timer = window.setTimeout(() => finish(null), timeoutMs);
         options?.signal?.addEventListener("abort", abort, { once: true });
-        image.onload = () => finish(image.naturalWidth && image.naturalHeight ? { width: image.naturalWidth, height: image.naturalHeight } : null);
+        image.onload = () => {
+            if (image.naturalWidth && image.naturalHeight) return finish({ width: image.naturalWidth, height: image.naturalHeight });
+            // 浏览器对超大图可能先用 onload 报一个 0×0，这时再等一次 decode 拿真实尺寸。
+            const decode = image.decode?.();
+            if (!decode) return finish(null);
+            void decode.then(
+                () => finish(image.naturalWidth && image.naturalHeight ? { width: image.naturalWidth, height: image.naturalHeight } : null),
+                () => finish(null),
+            );
+        };
         image.onerror = () => finish(null);
         image.src = url;
     });
 }
 
-function namedError(name: string) {
-    const error = new Error(i18n.t("common.imageReadFailed"));
+function namedError(name: string, message = i18n.t("common.imageReadFailed")) {
+    const error = new Error(name === IMAGE_TIMEOUT_ERROR ? i18n.t("common.imageDownloadTimeout") : message);
     error.name = name;
     return error;
 }
@@ -135,10 +179,6 @@ function isNamedError(error: unknown, name: string) {
 
 function abortReason(signal: AbortSignal) {
     return signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError");
-}
-
-function throwIfAborted(signal?: AbortSignal) {
-    if (signal?.aborted) throw abortReason(signal);
 }
 
 export async function resolveImageUrl(storageKey?: string, fallback = "") {
@@ -276,4 +316,17 @@ function blobToDataUrl(blob: Blob) {
         reader.onerror = () => reject(new Error(i18n.t("common.imageReadFailed")));
         reader.readAsDataURL(blob);
     });
+}
+
+/** data URL 转 Blob。base64 走 atob 批量解码，避免大图逐字符拼字符串卡死主线程。 */
+function dataUrlToBlob(dataUrl: string) {
+    const match = /^data:([^,]*?),(.*)$/s.exec(dataUrl);
+    if (!match) return Promise.reject(new Error(i18n.t("common.imageReadFailed")));
+    const [, header = "", body = ""] = match;
+    const mimeType = header.split(";")[0] || "application/octet-stream";
+    if (!/;base64/i.test(header)) return Promise.resolve(new Blob([decodeURIComponent(body)], { type: mimeType }));
+    const binary = atob(body.replace(/\s+/g, ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return Promise.resolve(new Blob([bytes], { type: mimeType }));
 }

@@ -27,6 +27,7 @@ export default {
         durationMinutes: "{{minutes}}分{{seconds}}秒",
         durationSeconds: "{{seconds}}秒",
         imageReadFailed: "读取图片失败",
+        imageDownloadTimeout: "下载图片超时（已等 10 分钟）。图片可能太大或网络中断，请重试。",
     },
     settingsPanels: {
         common: { auto: "自动", low: "低", medium: "中", high: "高", xhigh: "极高", max: "最高" },
