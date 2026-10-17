@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Group, Video } from "lucide-react";
 import { saveAs } from "file-saver";
 import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 import { isOpenAIMidjourneyConfig, requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
@@ -26,7 +27,7 @@ import { ActiveConnectionPath, ConnectionPath } from "@/components/canvas/canvas
 import { CanvasConfigComposer } from "@/components/canvas/canvas-config-composer";
 import { CanvasConfigNodePanel } from "@/components/canvas/canvas-config-node-panel";
 import { CanvasNodeContextMenu } from "@/components/canvas/canvas-context-menu";
-import { CanvasNodeAngleDialog, type CanvasImageAngleParams } from "@/components/canvas/canvas-node-angle-dialog";
+import { ANGLE_MATRIX_LAYOUTS, CanvasNodeAngleDialog, buildAngleMatrix, type CanvasImageAngleParams } from "@/components/canvas/canvas-node-angle-dialog";
 import { CanvasNodeCropDialog, type CanvasImageCropRect } from "@/components/canvas/canvas-node-crop-dialog";
 import { CanvasNodeMaskEditDialog, type CanvasImageMaskEditPayload } from "@/components/canvas/canvas-node-mask-edit-dialog";
 import { CanvasNodeSplitDialog, type CanvasImageSplitParams } from "@/components/canvas/canvas-node-split-dialog";
@@ -2143,6 +2144,96 @@ function VsStudioPage() {
         setDialogNodeId(childId);
     }, []);
 
+    const generateAngleMatrix = useCallback(
+        async (
+            node: CanvasNodeData,
+            params: CanvasImageAngleParams,
+            views: CanvasImageAngleParams[],
+            generationConfig: ReturnType<typeof buildGenerationConfig>,
+            sourceRef: ReferenceImage,
+        ) => {
+            const layout = ANGLE_MATRIX_LAYOUTS[params.matrix || "nine"];            const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
+            const gap = 48;
+            const startX = node.position.x + node.width + 96;
+            const startY = node.position.y;
+            const children = views.map((view, index) => ({
+                id: nanoid(),
+                index,
+                view,
+                position: {
+                    x: startX + (index % layout.columns) * (imageConfig.width + gap),
+                    y: startY + Math.floor(index / layout.columns) * (imageConfig.height + gap),
+                },
+            }));
+            const rows = Math.ceil(children.length / layout.columns);
+            const groupId = nanoid();
+            const groupRect = {
+                x: startX - 32,
+                y: startY - 32,
+                width: layout.columns * imageConfig.width + (layout.columns - 1) * gap + 64,
+                height: rows * imageConfig.height + (rows - 1) * gap + 64,
+            };
+            const createdChildren: CanvasNodeData[] = children.map((child) => ({
+                id: child.id,
+                type: CanvasNodeType.Image,
+                title: `${t("canvas.projectPage.angleMatrixView", { index: child.index + 1 })} · ${buildAngleLabel(child.view)}`,
+                position: child.position,
+                width: imageConfig.width,
+                height: imageConfig.height,
+                metadata: {
+                    prompt: i18n.t("canvas.editors.angleMatrixPrompt", { index: child.index + 1, total: views.length, angle: buildAngleLabel(child.view) }),
+                    status: NODE_STATUS_LOADING,
+                    groupId,
+                    ...buildImageGenerationMetadata("edit", generationConfig, 1, [sourceRef]),
+                },
+            }));
+            setAngleNodeId(null);
+            setNodes((prev) => [...prev, ...createdChildren]);
+            setConnections((prev) => [...prev, ...createdChildren.map((child) => ({ id: nanoid(), fromNodeId: node.id, toNodeId: child.id }))]);
+            // 全部出图后再按实际尺寸合并成组,组框才贴边
+            const groupRequestController = startGenerationRequest(groupId, node.id, groupId);
+            const queue = [...children];
+            const worker = async () => {
+                const current = queue.shift();
+                if (!current) return;
+                try {
+                    const anglePrompt = i18n.t("canvas.editors.angleMatrixPrompt", { index: current.index + 1, total: views.length, angle: buildAngleLabel(current.view) });
+                    const items = await requestEdit(generationConfig, anglePrompt, [sourceRef], { signal: groupRequestController.signal });
+                    if (!items.length) throw new Error(t("canvas.projectPage.generationFailed"));
+                    const uploadedImages = await Promise.all(items.map((entry) => uploadImage(entry.dataUrl, { signal: groupRequestController.signal })));
+                    const uploaded = uploadedImages[0];
+                    const images: CanvasNodeImage[] = uploadedImages.map((entry) => ({ id: nanoid(), status: NODE_STATUS_SUCCESS, content: entry.url, storageKey: entry.storageKey, naturalWidth: entry.width, naturalHeight: entry.height, bytes: entry.bytes, mimeType: entry.mimeType }));
+                    const size = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
+                    setNodes((prev) => prev.map((item) => (item.id === current.id ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), images, primaryImageId: images[0]?.id } } : item)));
+                } catch (error) {
+                    if (isGenerationCanceled(error)) return;
+                    const errorDetails = error instanceof Error ? error.message : t("canvas.projectPage.generationFailed");
+                    setNodes((prev) => prev.map((item) => (item.id === current.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails } } : item)));
+                } finally {
+                    finishGenerationRequest(current.id, groupRequestController);
+                    await worker();
+                }
+            };
+            try {
+                // 并发 3 路：矩阵张数多,全串行太慢,全并发容易被中转限流
+                await Promise.all(children.slice(0, 3).map(() => worker()));
+            } finally {
+                finishGenerationRequest(groupId, groupRequestController);
+                setRunningNodeId(null);
+            }
+            // 出图后统一成组,组节点本身不参与生成
+            const memberIds = new Set([...children.map((child) => child.id), groupId]);
+            setNodes((prev) => {
+                const members = prev.filter((item) => memberIds.has(item.id));
+                const others = prev.filter((item) => !memberIds.has(item.id));
+                const groupTitle = i18n.t("canvas.projectPage.angleMatrixGroup", { count: views.length });
+                const created = createCanvasNode(CanvasNodeType.Group, { x: groupRect.x + groupRect.width / 2, y: groupRect.y + groupRect.height / 2 });
+                return [...others, { ...created, id: groupId, title: groupTitle, position: { x: groupRect.x, y: groupRect.y }, width: groupRect.width, height: groupRect.height }, ...members.map((item) => ({ ...item, metadata: { ...item.metadata, groupId } }))];
+            });
+        },
+        [finishGenerationRequest, startGenerationRequest, t],
+    );
+
     const generateAngleNode = useCallback(
         async (node: CanvasNodeData, params: CanvasImageAngleParams) => {
             if (!node.metadata?.content) return;
@@ -2151,14 +2242,18 @@ function VsStudioPage() {
                 openConfigDialog(true);
                 return;
             }
+            const views = buildAngleMatrix(params);
+            const sourceRef = { id: node.id, name: `${node.title || node.id}.png`, type: node.metadata.mimeType || "image/png", dataUrl: node.metadata.content, storageKey: node.metadata.storageKey };
+            setAngleNodeId(null);
+            if (views.length > 1) {
+                await generateAngleMatrix(node, params, views, generationConfig, sourceRef);
+                return;
+            }
             const childId = nanoid();
             const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
             const title = buildAngleLabel(params);
             const prompt = buildAnglePrompt(params);
-            const generationMetadata = buildImageGenerationMetadata("edit", generationConfig, 1, [
-                { id: node.id, name: `${node.title || node.id}.png`, type: node.metadata.mimeType || "image/png", dataUrl: node.metadata.content, storageKey: node.metadata.storageKey },
-            ]);
-            setAngleNodeId(null);
+            const generationMetadata = buildImageGenerationMetadata("edit", generationConfig, 1, [sourceRef]);
             setRunningNodeId(childId);
             setNodes((prev) => [
                 ...prev,
@@ -2177,12 +2272,7 @@ function VsStudioPage() {
             setDialogNodeId(childId);
             const controller = startGenerationRequest(childId, node.id, childId);
             try {
-                const items = await requestEdit(
-                    generationConfig,
-                    prompt,
-                    [{ id: node.id, name: `${node.title || node.id}.png`, type: node.metadata.mimeType || "image/png", dataUrl: node.metadata.content, storageKey: node.metadata.storageKey }],
-                    { signal: controller.signal },
-                );
+                const items = await requestEdit(generationConfig, prompt, [sourceRef], { signal: controller.signal });
                 const image = items[0];
                 if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
                 const uploadedImages = await Promise.all(items.map((entry) => uploadImage(entry.dataUrl, { signal: controller.signal })));
@@ -2199,7 +2289,7 @@ function VsStudioPage() {
                 setRunningNodeId(null);
             }
         },
-        [effectiveConfig, finishGenerationRequest, openConfigDialog, startGenerationRequest, t],
+        [effectiveConfig, finishGenerationRequest, generateAngleMatrix, openConfigDialog, startGenerationRequest, t],
     );
 
     const handleFontSizeChange = useCallback((nodeId: string, fontSize: number) => {
