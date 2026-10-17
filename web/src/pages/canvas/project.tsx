@@ -48,7 +48,7 @@ import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useAgentBridge } from "@/pages/canvas/hooks/use-agent-bridge";
 import { usePluginHost } from "@/pages/canvas/hooks/use-plugin-host";
 import { buildNodeMentionReferences, getGroupResourceNodes, isCanvasReferenceNode, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
-import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
+import { exportCanvasProjects, exportCapCutDraft } from "@/lib/canvas/canvas-export";
 import { applyNodeConfigPatch, audioMetadata, buildAudioGenerationMetadata, buildImageGenerationMetadata, createCanvasNode, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-node-factory";
 import { applyGroupSelection, applyUngroupSelection, canGroupSelectedNodes, canUngroupSelectedNodes, collectGroupMemberNodes, findContainingGroupId, findGroupDropTarget, focusViewportForNode, getConnectionTargetAnchor, getGroupWrapRect, normalizeConnection, snapNodesIntoGroup } from "@/lib/canvas/canvas-node-geometry";
 import { ALIGN_SNAP_THRESHOLD_PX, EMPTY_ALIGN_GUIDES, arrangeNodesByFlow, arrangeNodesInGrid, computeAlignmentSnap, type AlignmentGuides } from "@/lib/canvas/canvas-node-align";
@@ -1238,6 +1238,19 @@ function VsStudioPage() {
         } catch (error) {
             console.error(error);
             message.error(t("canvas.sidePanel.exportFailed"));
+        } finally {
+            hide();
+        }
+    }, [message, projectId, t]);
+
+    const exportCapCut = useCallback(async () => {
+        const project = useCanvasStore.getState().projects.find((item) => item.id === projectId);
+        const hide = message.loading(t("canvas.projectPage.exporting"), 0);
+        try {
+            await exportCapCutDraft(nodesRef.current, connectionsRef.current, project?.title || t("canvas.capcut.defaultTitle"));
+            message.success(t("canvas.capcut.done"));
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : t("canvas.sidePanel.exportFailed"));
         } finally {
             hide();
         }
@@ -3431,6 +3444,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                     onCreateProject={createAndOpenProject}
                     onDeleteProject={deleteCurrentProject}
                     onExportProject={exportCurrentProject}
+                    onExportCapCut={exportCapCut}
                     onImportImage={() => handleUploadRequest()}
                     onOpenPlugins={() => setPluginManagerOpen(true)}
                     onUndo={undoCanvas}

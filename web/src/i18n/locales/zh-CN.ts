@@ -266,6 +266,17 @@ export default {
             deleteTitle: "删除画布？", deleteDescription: "将删除 {{count}} 个画布，里面的节点和连线也会一起移除。",
         },
         export: { defaultProjectName: "VS studio", defaultNodesName: "画布元素", item: "元素" },
+        capcut: {
+            menu: "导出剪映草稿",
+            menuTitle: "把画布上的镜头按顺序排成时间线，导出成可直接打开的剪映草稿",
+            defaultTitle: "画布成片",
+            clipName: "镜头 {{index}}",
+            audioName: "音频 {{index}}",
+            fileSuffix: "剪映草稿",
+            done: "剪映草稿已导出，解压后把里面的文件夹放到剪映草稿目录即可打开。",
+            empty: "画布上没有可导出的镜头。先生成或上传图片、视频再导出。",
+            readme: "这是 VS studio 导出的剪映草稿「{{title}}」。\n\n用法：把解压出来的「{{title}}」整个文件夹拷到剪映的草稿目录里（剪映 → 全局设置 → 草稿位置，通常是电脑版「文档/JianyingPro/User Data/Projects/com.lveditor.draft」），再打开剪映，草稿列表里就会出现它。\n\n说明：图片默认每张 3 秒、视频按实际时长，音频单独放在音轨。转场、字幕、调色这些请在剪映里继续做。",
+        },
         createMenu: {
             fromNode: "引用该节点生成", close: "关闭", text: "文本生成", textDescription: "脚本、广告词、品牌文案", image: "图片生成", video: "视频生成", audio: "音频参考", config: "配置节点", configDescription: "模型、尺寸、数量和输入顺序", select: "选择节点",
         },
@@ -301,7 +312,7 @@ export default {
         references: { title: "参考内容", select: "从画布选择参考节点", disconnect: "断开参考连接", empty: "暂无内容", selecting: "正在添加参考", choose: "选择", selectingHint: "从画布选择参考 · ESC 返回输入框" },
         composer: { title: "组装提示词", description: "@ 引用已连接资产，发送前按当前连接重新编号", placeholder: "输入提示词，按 @ 引用连接的图片、文本或组", imagePreview: "引用图片预览", resources: { image: "图片{{index}}", video: "视频{{index}}", audio: "音频{{index}}", text: "文本{{index}}", group: "组{{index}}" } },
         controls: { ratio: "比例", duplicate: "复制", delete: "删除", images: "{{count}} 张", texts: "{{count}} 条", generations: "{{count}} 次", reasoning: "推理" },
-        generation: { interrupted: "页面刷新后生成已中断，请重新生成。", front: "正面视角", rotateRight: "向右旋转 {{angle}} 度", rotateLeft: "向左旋转 {{angle}} 度", level: "水平视角", topDown: "俯视 {{angle}} 度", lowAngle: "仰视 {{angle}} 度", angleLabel: "AI 多角度：{{horizontal}}，{{pitch}}，镜头距离 {{distance}}，{{lens}}镜头", anglePrompt: "基于参考图重新生成同一主体的新视角，保持主体、颜色、材质和画面风格一致，不要只做透视变形。{{angle}}。" },
+        generation: { interrupted: "页面刷新后生成已中断，请重新生成。", imageSaveInterrupted: "图片已生成，但保存大图时页面被刷新了。点重新生成即可（尺寸、提示词都已保留）。", front: "正面视角", rotateRight: "向右旋转 {{angle}} 度", rotateLeft: "向左旋转 {{angle}} 度", level: "水平视角", topDown: "俯视 {{angle}} 度", lowAngle: "仰视 {{angle}} 度", angleLabel: "AI 多角度：{{horizontal}}，{{pitch}}，镜头距离 {{distance}}，{{lens}}镜头", anglePrompt: "基于参考图重新生成同一主体的新视角，保持主体、颜色、材质和画面风格一致，不要只做透视变形。{{angle}}。" },
         agentOps: { add_node: "新增节点", update_node: "更新节点", delete_node: "删除节点", delete_connections: "删除连线", connect_nodes: "连接", set_viewport: "调整视图", select_nodes: "选择节点", run_generation: "触发生成" },
         pluginErrors: { invalidExport: "插件未导出有效对象", missingFields: "插件缺少 id 或 nodes", downloadFailed: "下载失败 (HTTP {{status}})", registryFailed: "获取官方插件列表失败 (HTTP {{status}})" },
         shortcut: {

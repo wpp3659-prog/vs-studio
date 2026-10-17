@@ -5,6 +5,8 @@ description: Implemented changes that still need manual verification
 
 # Pending Tests
 
+- CapCut draft export: on a canvas with 2–3 images and one video, open the top-left menu → "Export CapCut draft". A zip should download. After extracting, the "Canvas Cut" folder should contain `draft_content.json`, `draft_meta_info.json`, a `materials/` folder and a readme. Copy the whole folder into CapCut's draft directory and open CapCut — the project should appear, with shots ordered like the canvas (connections first, otherwise left-to-right and top-to-bottom), each image 3 seconds, videos keeping their real length, no gaps or overlaps, and generated audio on its own audio track. A canvas dominated by portrait media should export a portrait draft. Exporting an empty canvas should say there is nothing to export instead of downloading an empty package.
+
 - Large images: generate an image through a channel that returns the original 20 MB+ file (or drop such a file onto the canvas). The node should show the image once generation finishes instead of "Generation was interrupted by a page refresh." Zooming the node should stay sharp (the full-size image is kept, not just the thumbnail), and the image should still be there after reloading the page and be downloadable.
 - Refresh during large-image save: generate a large image and reload immediately. If "The image was generated, but the page refreshed while the large file was still being saved" appears, the save really was cut off — regenerating is enough. Otherwise the image should just appear with no red text.
 

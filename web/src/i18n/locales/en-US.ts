@@ -266,6 +266,17 @@ export default {
             deleteTitle: "Delete canvases?", deleteDescription: "This will delete {{count}} canvases along with their nodes and connections.",
         },
         export: { defaultProjectName: "VS studio", defaultNodesName: "Canvas elements", item: "Element" },
+        capcut: {
+            menu: "Export CapCut draft",
+            menuTitle: "Lay the canvas shots out in order and export a CapCut draft you can open directly",
+            defaultTitle: "Canvas Cut",
+            clipName: "Shot {{index}}",
+            audioName: "Audio {{index}}",
+            fileSuffix: "CapCut Draft",
+            done: "CapCut draft exported. Unzip it and drop the folder into CapCut's draft directory.",
+            empty: "There are no exportable shots on this canvas. Generate or upload images or videos first.",
+            readme: "This is the CapCut draft \"{{title}}\" exported from VS studio.\n\nTo use it, copy the extracted \"{{title}}\" folder into CapCut's draft directory (CapCut → Settings → Draft location; on desktop this is usually Documents/JianyingPro/User Data/Projects/com.lveditor.draft), then open CapCut — the draft appears in your list.\n\nNotes: images last 3 seconds each, videos keep their real length, and audio goes on its own audio track. Transitions, captions and color grading are best finished inside CapCut.",
+        },
         createMenu: {
             fromNode: "Generate from this node", close: "Close", text: "Generate text", textDescription: "Scripts, ad copy, and brand content", image: "Generate image", video: "Generate video", audio: "Audio reference", config: "Configuration node", configDescription: "Model, size, count, and input order", select: "Select a node",
         },
