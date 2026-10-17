@@ -96,7 +96,7 @@ type GeminiPayload = {
     promptFeedback?: { blockReason?: string };
 };
 type GeminiStreamState = { buffer: string; text: string; toolCalls: ResponseToolCall[]; error?: string };
-type RequestOptions = { signal?: AbortSignal; subjects?: SubjectReferenceHint[] };
+type RequestOptions = { signal?: AbortSignal; subjects?: SubjectReferenceHint[]; onTaskCreated?: (taskId: string) => void };
 
 const IMAGE_QUALITY_VALUES = ["low", "medium", "high", "xhigh", "max"];
 const DEFAULT_IMAGE_SHORT_SIDE = 1024;
@@ -405,6 +405,16 @@ async function readAsyncTaskPayload(config: AiConfig, url: string, options?: Req
         if (axios.isAxiosError(error) && error.response?.status === 404) throw new Error(apiText("imageTaskUnsupported"));
         throw error;
     }
+}
+
+/**
+ * 刷新页面后继续查一个已创建的异步生图任务。
+ * 请求发出时任务号已存进节点 metadata（imageTaskId），这里用它恢复轮询；
+ * 模型按节点上记录的来，和发起请求时保持一致。
+ */
+export async function resumeImageTask(config: AiConfig, taskId: string, options?: RequestOptions) {
+    const requestConfig = resolveModelRequestConfig(config, config.model || config.imageModel);
+    return pollAsyncImageTask(requestConfig, taskId, options);
 }
 
 function isImageTaskFailure(status: string) {
@@ -997,7 +1007,11 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
             },
         );
         const asyncTaskId = readAsyncTaskId(response);
-        if (asyncTaskId) return pollAsyncImageTask(requestConfig, asyncTaskId, options);
+        if (asyncTaskId) {
+            // 任务号先交给调用方存进节点，页面刷新后才能继续查这个任务。
+            options?.onTaskCreated?.(asyncTaskId);
+            return pollAsyncImageTask(requestConfig, asyncTaskId, options);
+        }
         const images = await parseImagePayload(requestConfig, response.data, options);
         return images;
     } catch (error) {
@@ -1080,7 +1094,11 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
             timeout: IMAGE_REQUEST_TIMEOUT_MS,
         });
         const asyncTaskId = readAsyncTaskId(response);
-        if (asyncTaskId) return pollAsyncImageTask(requestConfig, asyncTaskId, options);
+        if (asyncTaskId) {
+            // 任务号先交给调用方存进节点，页面刷新后才能继续查这个任务。
+            options?.onTaskCreated?.(asyncTaskId);
+            return pollAsyncImageTask(requestConfig, asyncTaskId, options);
+        }
         const images = await parseImagePayload(requestConfig, response.data, options);
         return images;
     } catch (error) {

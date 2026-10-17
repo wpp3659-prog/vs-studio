@@ -6,7 +6,7 @@ import { saveAs } from "file-saver";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 
-import { isOpenAIMidjourneyConfig, requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
+import { isOpenAIMidjourneyConfig, requestEdit, requestGeneration, requestImageQuestion, resumeImageTask } from "@/services/api/image";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { createVideoGenerationTask, isVideoTaskFailed, storeGeneratedVideo, waitForVideoGenerationTask } from "@/services/api/video";
 import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -52,7 +52,7 @@ import { exportCanvasProjects, exportCapCutDraft, exportDeliveryPackage } from "
 import { countMissingVoiceover } from "@/lib/canvas/delivery-package";
 import { applyNodeConfigPatch, audioMetadata, buildAudioGenerationMetadata, buildImageGenerationMetadata, createCanvasNode, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-node-factory";
 import { applyGroupSelection, applyUngroupSelection, canGroupSelectedNodes, canUngroupSelectedNodes, collectGroupMemberNodes, findContainingGroupId, findGroupDropTarget, focusViewportForNode, getConnectionTargetAnchor, getGroupWrapRect, normalizeConnection, snapNodesIntoGroup } from "@/lib/canvas/canvas-node-geometry";
-import { ALIGN_SNAP_THRESHOLD_PX, EMPTY_ALIGN_GUIDES, arrangeNodesByFlow, arrangeNodesInGrid, computeAlignmentSnap, type AlignmentGuides } from "@/lib/canvas/canvas-node-align";
+import { ALIGN_SNAP_THRESHOLD_PX, EMPTY_ALIGN_GUIDES, arrangeNodesByFlow, arrangeNodesInGrid, chainSelectedNodes, computeAlignmentSnap, type AlignmentGuides } from "@/lib/canvas/canvas-node-align";
 import {
     audioExtension,
     buildAngleLabel,
@@ -63,6 +63,7 @@ import {
     getGenerationCount,
     getInputSummary,
     hasResumableVideoTask,
+    hasResumableImageTask,
     hydrateAssistantImages,
     hydrateCanvasImages,
     imageExtension,
@@ -414,6 +415,53 @@ function VsStudioPage() {
         [effectiveConfig, finishGenerationRequest, isAiConfigReady, message, openConfigDialog, startGenerationRequest, t],
     );
 
+    // 刷新页面后续查异步生图任务：请求时任务号已存进节点 metadata，这里恢复轮询并把结果填回唯一的图片槽位。
+    const resumeImageNodeTask = useCallback(
+        async (node: CanvasNodeData) => {
+            const taskId = node.metadata?.imageTaskId;
+            if (!taskId || generationRequestsRef.current.has(node.id)) return;
+            const generationConfig = {
+                ...buildGenerationConfig(effectiveConfig, node, "image"),
+                model: node.metadata?.model || effectiveConfig.imageModel || effectiveConfig.model,
+                size: node.metadata?.size || effectiveConfig.size,
+                quality: node.metadata?.quality || effectiveConfig.quality,
+            };
+            const controller = startGenerationRequest(node.id, node.id, node.id);
+            try {
+                if (!isAiConfigReady(generationConfig, generationConfig.model)) throw new Error(t("workbench.configFirst"));
+                const items = await resumeImageTask(generationConfig, taskId, { signal: controller.signal });
+                const image = items[0];
+                if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
+                const uploaded = await uploadImage(image.dataUrl, { signal: controller.signal });
+                const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
+                const imageSize = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
+                setNodes((prev) =>
+                    prev.map((item) => {
+                        if (item.id !== node.id) return item;
+                        const imageId = item.metadata?.images?.[0]?.id || "";
+                        const images = item.metadata?.images?.map((slot) => (slot.id === imageId ? { ...slot, status: NODE_STATUS_SUCCESS, content: uploaded.url, storageKey: uploaded.storageKey, naturalWidth: uploaded.width, naturalHeight: uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType } : slot));
+                        const center = { x: item.position.x + item.width / 2, y: item.position.y + item.height / 2 };
+                        return {
+                            ...item,
+                            position: { x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2 },
+                            ...imageSize,
+                            metadata: { ...item.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, imageTaskId: undefined, images, primaryImageId: imageId || item.metadata?.primaryImageId },
+                        };
+                    }),
+                );
+            } catch (error) {
+                // 任务已失效（404）或续查超时就如实标错并清掉任务号，避免下次刷新再查一个查不到的任务。
+                if (isGenerationCanceled(error)) return;
+                const errorDetails = error instanceof Error ? error.message : t("canvas.projectPage.generationFailed");
+                message.error(errorDetails);
+                setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails, imageTaskId: undefined } } : item)));
+            } finally {
+                finishGenerationRequest(node.id, controller);
+            }
+        },
+        [effectiveConfig, finishGenerationRequest, isAiConfigReady, message, startGenerationRequest, t],
+    );
+
     const stopGenerationByRunningId = useCallback((runningId: string) => {
         const affectedNodeIds = new Set<string>();
         generationRequestsRef.current.forEach((request) => {
@@ -498,6 +546,7 @@ function VsStudioPage() {
     useEffect(() => {
         if (!projectLoaded) return;
         nodesRef.current.filter(hasResumableVideoTask).forEach((node) => void pollVideoNodeTask(node, true));
+        nodesRef.current.filter(hasResumableImageTask).forEach((node) => void resumeImageNodeTask(node));
         // Resume once after the current canvas is restored, not on later config identity changes.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projectLoaded]);
@@ -938,6 +987,20 @@ function VsStudioPage() {
         setNodes((prev) => (mode === "flow" ? arrangeNodesByFlow(prev, connectionsRef.current, selectedIds) : arrangeNodesInGrid(prev, selectedIds)) ?? prev);
         setContextMenu(null);
     }, []);
+
+    // 把选中的镜头按当前排布顺序串成 1→2→3，导出剪映/交付包时镜序就固定了，不用再猜顺序。
+    const chainSelectedShots = useCallback(() => {
+        const selectedIds = selectedNodeIdsRef.current;
+        if (selectedIds.size < 2) return;
+        const result = chainSelectedNodes(nodesRef.current, connectionsRef.current, selectedIds, () => nanoid());
+        setContextMenu(null);
+        if (!result) {
+            message.info(t("canvas.projectPage.chainShotsNoop"));
+            return;
+        }
+        setConnections(result.connections);
+        message.success(t("canvas.projectPage.chainShotsDone", { added: result.added, total: result.total }));
+    }, [message, t]);
 
     const deleteConnection = useCallback((connectionId: string) => {
         setConnections((prev) => prev.filter((conn) => conn.id !== connectionId));
@@ -2688,7 +2751,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                                             width: rootNode.width,
                                             height: rootNode.height,
                                             title: rootNode.title,
-                                            metadata: { ...node.metadata, ...rootNode.metadata, content: undefined, storageKey: undefined, naturalWidth: undefined, naturalHeight: undefined, bytes: undefined, mimeType: undefined, errorDetails: undefined },
+                                            metadata: { ...node.metadata, ...rootNode.metadata, content: undefined, storageKey: undefined, naturalWidth: undefined, naturalHeight: undefined, bytes: undefined, mimeType: undefined, errorDetails: undefined, imageTaskId: undefined },
                                         }
                                       : isImageNode
                                         ? {
@@ -2721,12 +2784,17 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                     // 每个槽位发一次请求；上游一次返回多张时（如 MJ 一次返回 4 张），
                     // 把多余的图片写入新槽位，实现「上游给几张就显示几张」。
                     const extraImages: CanvasNodeImage[] = [];
+                    // 中转把请求转成异步任务时先记下任务号：页面刷新后能继续查，不用从头再生成一次。
+                    // 多槽位并发生成时任务和槽位对不上，只对单槽位（含 MJ 四图单任务）记录。
+                    const onImageTaskCreated = imageIds.length === 1
+                        ? (taskId: string) => setNodes((prev) => prev.map((node) => (node.id === rootId ? { ...node, metadata: { ...node.metadata, imageTaskId: taskId } } : node)))
+                        : undefined;
                     await Promise.all(
                         imageIds.map(async (imageId) => {
                             try {
                                 const items = referenceImages.length
-                                    ? await requestEdit({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, { signal: controller.signal, subjects: subjectHints })
-                                    : await requestGeneration({ ...generationConfig, count: "1" }, effectivePrompt, { signal: controller.signal });
+                                    ? await requestEdit({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, { signal: controller.signal, subjects: subjectHints, onTaskCreated: onImageTaskCreated })
+                                    : await requestGeneration({ ...generationConfig, count: "1" }, effectivePrompt, { signal: controller.signal, onTaskCreated: onImageTaskCreated });
                                 const image = items[0];
                                 if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
                                 const uploaded = await uploadImage(image.dataUrl, { signal: controller.signal });
@@ -2754,6 +2822,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                                                 mimeType: item.mimeType,
                                                 images,
                                                 primaryImageId: imageId,
+                                                imageTaskId: undefined,
                                             },
                                         };
                                     }),
@@ -2794,7 +2863,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                             node.id === nodeId && isConfigNode
                                 ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : firstError || t("canvas.projectPage.generationFailed") } }
                                 : node.id === rootId
-                                  ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : firstError || t("canvas.projectPage.allFailed") } }
+                                  ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : firstError || t("canvas.projectPage.allFailed"), imageTaskId: undefined } }
                                     : node,
                         ),
                     );
@@ -3109,9 +3178,10 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                     return;
                 }
 
+                const onRetryTaskCreated = (taskId: string) => setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, imageTaskId: taskId } } : item)));
                 const items = useReferenceImages
-                    ? await requestEdit(generationConfig, prompt, retryImages, { signal: controller.signal, subjects: collectSubjectHints(retryImages, connectionsRef.current, nodesRef.current) })
-                    : await requestGeneration(generationConfig, prompt, { signal: controller.signal });
+                    ? await requestEdit(generationConfig, prompt, retryImages, { signal: controller.signal, subjects: collectSubjectHints(retryImages, connectionsRef.current, nodesRef.current), onTaskCreated: onRetryTaskCreated })
+                    : await requestGeneration(generationConfig, prompt, { signal: controller.signal, onTaskCreated: onRetryTaskCreated });
                 const image = items[0];
                 if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
                 const uploadedImage = await uploadImage(image.dataUrl, { signal: controller.signal });
@@ -3160,6 +3230,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                                 images: [...(item.metadata?.images?.map((current) => (current.id === retryImage.id ? retryImage : current)) || []), ...retryExtraImages],
                                 primaryImageId: makePrimary ? retryImage.id : item.metadata?.primaryImageId,
                                 prompt,
+                                imageTaskId: undefined,
                                 ...generationMetadata,
                             },
                         };
@@ -3181,6 +3252,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                                       status: item.metadata?.content ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR,
                                       errorDetails: item.metadata?.content ? undefined : errorDetails,
                                       images: item.metadata?.images?.map((image) => (image.id === imageId ? { ...image, status: NODE_STATUS_ERROR, errorDetails } : image)),
+                                      imageTaskId: undefined,
                                       ...(isVideoTaskFailed(error) && item.type === CanvasNodeType.Video ? { videoTaskId: undefined } : {}),
                                   },
                               }
@@ -3661,6 +3733,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                         onUngroup={ungroupSelection}
                         onArrangeGrid={() => arrangeSelection("grid")}
                         onArrangeFlow={() => arrangeSelection("flow")}
+                        onChainShots={chainSelectedShots}
                     />
                 ) : null}
 

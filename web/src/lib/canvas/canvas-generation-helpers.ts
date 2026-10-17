@@ -127,6 +127,11 @@ export function hasResumableVideoTask(node: CanvasNodeData) {
     return node.type === CanvasNodeType.Video && Boolean(node.metadata?.videoTaskId) && !node.metadata?.content;
 }
 
+/** 异步生图任务还没查完，刷新页面后要继续轮询，不能当「已中断」处理。 */
+export function hasResumableImageTask(node: CanvasNodeData) {
+    return node.type === CanvasNodeType.Image && Boolean(node.metadata?.imageTaskId) && node.metadata?.status === "loading";
+}
+
 /**
  * 页面在「上游已出图、正在把整张图写进本地」的窗口里被刷新时，节点还是 loading。
  * 这时直接判成「生成已中断」会让用户以为上游失败（大图最容易撞上，实际图已经出来了）。
@@ -134,7 +139,7 @@ export function hasResumableVideoTask(node: CanvasNodeData) {
  */
 export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
     return nodes.map((node) => {
-        if (node.metadata?.status !== "loading" || hasResumableVideoTask(node)) return node;
+        if (node.metadata?.status !== "loading" || hasResumableVideoTask(node) || hasResumableImageTask(node)) return node;
         const saving = node.type === CanvasNodeType.Image && isSavingImages(node);
         const reason = i18n.t(saving ? "canvas.generation.imageSaveInterrupted" : "canvas.generation.interrupted");
         return {

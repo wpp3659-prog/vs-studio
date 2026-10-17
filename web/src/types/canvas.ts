@@ -83,6 +83,8 @@ export type CanvasNodeMetadata = {
     durationMs?: number;
     videoTaskId?: string;
     videoTaskProvider?: "openai" | "gemini";
+    /** 异步生图任务号（中转支持 Prefer: respond-async 时创建），刷新页面后据此续查任务。 */
+    imageTaskId?: string;
     groupId?: string;
     interactive?: boolean; // Plugin node interaction/move state; see CanvasNodeDefinition.interactionToggle.
 };
