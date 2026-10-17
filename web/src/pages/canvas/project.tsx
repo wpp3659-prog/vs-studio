@@ -5,7 +5,7 @@ import { Group, Video } from "lucide-react";
 import { saveAs } from "file-saver";
 import { useTranslation } from "react-i18next";
 
-import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
+import { isOpenAIMidjourneyConfig, requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { createVideoGenerationTask, isVideoTaskFailed, storeGeneratedVideo, waitForVideoGenerationTask } from "@/services/api/video";
 import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -50,6 +50,7 @@ import { buildNodeMentionReferences, getGroupResourceNodes, isCanvasReferenceNod
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 import { applyNodeConfigPatch, audioMetadata, buildAudioGenerationMetadata, buildImageGenerationMetadata, createCanvasNode, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-node-factory";
 import { applyGroupSelection, applyUngroupSelection, canGroupSelectedNodes, canUngroupSelectedNodes, collectGroupMemberNodes, findContainingGroupId, findGroupDropTarget, focusViewportForNode, getConnectionTargetAnchor, getGroupWrapRect, normalizeConnection, snapNodesIntoGroup } from "@/lib/canvas/canvas-node-geometry";
+import { ALIGN_SNAP_THRESHOLD_PX, EMPTY_ALIGN_GUIDES, arrangeNodesByFlow, arrangeNodesInGrid, computeAlignmentSnap, type AlignmentGuides } from "@/lib/canvas/canvas-node-align";
 import {
     audioExtension,
     buildAngleLabel,
@@ -70,6 +71,7 @@ import {
     sourceNodeReferenceImages,
 } from "@/lib/canvas/canvas-generation-helpers";
 import { getNodeDefinition, isBuiltinNodeType as isBuiltinType, useNodeRegistryVersion } from "@/lib/canvas/node-registry";
+import { mismatchMediaRatio } from "@/lib/media-size";
 import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
 import { CanvasPluginManagerModal } from "@/components/canvas/canvas-plugin-manager-modal";
 import { CanvasRefreshShell } from "@/components/canvas/canvas-refresh-shell";
@@ -210,6 +212,8 @@ function VsStudioPage() {
         hasMoved: boolean;
         startX: number;
         startY: number;
+        // 拖动中按住 Alt 时关闭对齐吸附，松开鼠标前一直保持关闭。
+        snapDisabled: boolean;
         // Keyed by node id so drag frames look positions up in O(1) instead of scanning the array per node.
         initialSelectedNodes: Map<string, { x: number; y: number }>;
         movedIds: Set<string>;
@@ -218,6 +222,7 @@ function VsStudioPage() {
         hasMoved: false,
         startX: 0,
         startY: 0,
+        snapDisabled: false,
         initialSelectedNodes: new Map(),
         movedIds: new Set(),
     });
@@ -281,6 +286,7 @@ function VsStudioPage() {
     const [isNodeDragging, setIsNodeDragging] = useState(false);
     const [isNodeResizing, setIsNodeResizing] = useState(false);
     const [dropTargetGroupId, setDropTargetGroupId] = useState<string | null>(null);
+    const [alignGuides, setAlignGuides] = useState<AlignmentGuides>(EMPTY_ALIGN_GUIDES);
     const [referencePickerNodeId, setReferencePickerNodeId] = useState<string | null>(null);
 
     const nodesRef = useRef(nodes);
@@ -921,6 +927,14 @@ function VsStudioPage() {
         setContextMenu(null);
     }, []);
 
+    // 自动整理：网格是把选中节点排整齐，流程是按连线方向从左到右分层。
+    const arrangeSelection = useCallback((mode: "grid" | "flow") => {
+        const selectedIds = selectedNodeIdsRef.current;
+        if (selectedIds.size < 2) return;
+        setNodes((prev) => (mode === "flow" ? arrangeNodesByFlow(prev, connectionsRef.current, selectedIds) : arrangeNodesInGrid(prev, selectedIds)) ?? prev);
+        setContextMenu(null);
+    }, []);
+
     const deleteConnection = useCallback((connectionId: string) => {
         setConnections((prev) => prev.filter((conn) => conn.id !== connectionId));
         setSelectedConnectionId((current) => (current === connectionId ? null : current));
@@ -1309,6 +1323,7 @@ function VsStudioPage() {
             hasMoved: false,
             startX: event.clientX,
             startY: event.clientY,
+            snapDisabled: false,
             initialSelectedNodes,
             movedIds: new Set(initialSelectedNodes.keys()),
         };
@@ -1336,17 +1351,22 @@ function VsStudioPage() {
         nodeDraggingRef.current = false;
         setIsNodeDragging(false);
         setDropTargetGroupId(null);
+        setAlignGuides(EMPTY_ALIGN_GUIDES);
         if (dragRef.current.hasMoved && clientX != null && clientY != null) {
+            const snapDisabled = dragRef.current.snapDisabled;
             setNodes((prev) => {
                 const moved = prev.map((node) => {
                     const initial = initialPositions.get(node.id);
                     return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
                 });
-                const targetGroup = findGroupDropTarget(movedIds, moved);
-                if (targetGroup) return snapNodesIntoGroup(movedIds, moved, targetGroup);
-                return moved.map((node) => {
+                // 落点要和拖动预览一致，所以这里用同一套吸附规则再算一次。
+                const snap = snapDisabled ? null : computeAlignmentSnap(moved.filter((node) => movedIds.has(node.id)), moved.filter((node) => !movedIds.has(node.id)), ALIGN_SNAP_THRESHOLD_PX / currentViewport.k);
+                const snapped = snap && (snap.dx || snap.dy) ? moved.map((node) => (movedIds.has(node.id) ? { ...node, position: { x: node.position.x + snap.dx, y: node.position.y + snap.dy } } : node)) : moved;
+                const targetGroup = findGroupDropTarget(movedIds, snapped);
+                if (targetGroup) return snapNodesIntoGroup(movedIds, snapped, targetGroup);
+                return snapped.map((node) => {
                     if (!movedIds.has(node.id) || node.type === CanvasNodeType.Group) return node;
-                    const groupId = findContainingGroupId(node, moved);
+                    const groupId = findContainingGroupId(node, snapped);
                     if (node.metadata?.groupId === groupId) return node;
                     return { ...node, metadata: { ...node.metadata, groupId } };
                 });
@@ -1355,6 +1375,7 @@ function VsStudioPage() {
 
         dragRef.current.isDraggingNode = false;
         dragRef.current.hasMoved = false;
+        dragRef.current.snapDisabled = false;
         dragRef.current.initialSelectedNodes = new Map();
         dragRef.current.movedIds = new Set();
         if (wasClick && clickedNodeId) {
@@ -1393,11 +1414,18 @@ function VsStudioPage() {
                         const initial = initialPositions.get(node.id);
                         return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
                     });
-                    setDropTargetGroupId(findGroupDropTarget(movedIds, previewNodes)?.id || null);
+                    // 拖动中按住 Alt 可以临时关掉对齐吸附，方便自由摆放。
+                    if (event.altKey) dragRef.current.snapDisabled = true;
+                    const snap = dragRef.current.snapDisabled ? null : computeAlignmentSnap(previewNodes.filter((node) => movedIds.has(node.id)), previewNodes.filter((node) => !movedIds.has(node.id)), ALIGN_SNAP_THRESHOLD_PX / currentViewport.k);
+                    const offsetX = dx + (snap?.dx ?? 0);
+                    const offsetY = dy + (snap?.dy ?? 0);
+                    const snappedNodes = snap && (snap.dx || snap.dy) ? previewNodes.map((node) => (movedIds.has(node.id) ? { ...node, position: { x: node.position.x + snap.dx, y: node.position.y + snap.dy } } : node)) : previewNodes;
+                    setAlignGuides(snap ? snap.guides : EMPTY_ALIGN_GUIDES);
+                    setDropTargetGroupId(findGroupDropTarget(movedIds, snappedNodes)?.id || null);
                     setNodes((prev) =>
                         prev.map((node) => {
                             const initial = initialPositions.get(node.id);
-                            return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
+                            return initial ? { ...node, position: { x: initial.x + offsetX, y: initial.y + offsetY } } : node;
                         }),
                     );
                     rafRef.current = null;
@@ -1973,19 +2001,29 @@ function VsStudioPage() {
             setSplitNodeId(null);
             const pieces = await splitDataUrl(node.metadata.content, params);
             const gap = 16;
+            const storyboard = Boolean(params.storyboard);
             const cellWidth = node.width / params.columns;
             const cellHeight = node.height / params.rows;
+            // 分镜组模式每行固定 5 个镜头,避免一行过长看不清;普通模式按原图网格排布
+            const cellsPerRow = storyboard ? Math.min(5, Math.max(1, pieces.length)) : params.columns;
             const startX = node.position.x + node.width + 96;
             const startY = node.position.y;
             const childNodes = await Promise.all(
-                pieces.map(async (piece) => {
+                pieces.map(async (piece, index) => {
                     const image = await uploadImage(piece.dataUrl);
                     const id = nanoid();
+                    // 分镜组模式:按镜头顺序从左到右铺开(每行最多 cellsPerRow 个),并给标题加镜号
+                    const shotNo = storyboard ? index + 1 : 0;
+                    const position = storyboard
+                        ? { x: startX + (index % cellsPerRow) * (cellWidth + gap), y: startY + Math.floor(index / cellsPerRow) * (cellHeight + gap) }
+                        : { x: startX + piece.column * (cellWidth + gap), y: startY + piece.row * (cellHeight + gap) };
                     return {
                         id,
                         type: CanvasNodeType.Image,
-                        title: t("canvas.projectPage.splitTitle", { name: node.title || t("assets.kinds.image"), row: piece.row + 1, column: piece.column + 1 }),
-                        position: { x: startX + piece.column * (cellWidth + gap), y: startY + piece.row * (cellHeight + gap) },
+                        title: storyboard
+                            ? t("canvas.projectPage.storyboardShotTitle", { index: shotNo })
+                            : t("canvas.projectPage.splitTitle", { name: node.title || t("assets.kinds.image"), row: piece.row + 1, column: piece.column + 1 }),
+                        position,
                         width: cellWidth,
                         height: cellHeight,
                         metadata: {
@@ -2065,6 +2103,8 @@ function VsStudioPage() {
                 const images: CanvasNodeImage[] = uploadedImages.map((entry) => ({ id: nanoid(), status: NODE_STATUS_SUCCESS, content: entry.url, storageKey: entry.storageKey, naturalWidth: entry.width, naturalHeight: entry.height, bytes: entry.bytes, mimeType: entry.mimeType }));
                 const size = fitNodeSize(uploaded.width, uploaded.height, node.width, node.height);
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), images, primaryImageId: images[0]?.id, prompt, ...generationMetadata } } : item)));
+                const ratioMismatch = mismatchMediaRatio(generationConfig.size, uploaded.width, uploaded.height);
+                if (ratioMismatch) message.warning(t("canvas.projectPage.ratioMismatch", { requested: ratioMismatch.requested, actual: ratioMismatch.actual }));
             } catch (error) {
                 if (isGenerationCanceled(error)) return;
                 const errorDetails = error instanceof Error ? error.message : t("canvas.projectPage.maskFailed");
@@ -2373,11 +2413,13 @@ function VsStudioPage() {
                     // 上游可能一次返回多张（如 MJ 一次返回 4 张）：全部写入节点，画布显示上游实际返回的张数。
                     const uploadedImages = await Promise.all(items.map((entry) => uploadImage(entry.dataUrl, { signal: controller.signal })));
                     const primary = uploadedImages[0];
+                    const ratioMismatch = primary ? mismatchMediaRatio(generationConfig.size, primary.width, primary.height) : null;
                     const images: CanvasNodeImage[] = uploadedImages.map((uploaded) => ({ id: nanoid(), status: NODE_STATUS_SUCCESS, content: uploaded.url, storageKey: uploaded.storageKey, naturalWidth: uploaded.width, naturalHeight: uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType }));
                     setNodes((prev) =>
                         prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...imageMetadata(primary), prompt: scene, model: generationConfig.model, status: NODE_STATUS_SUCCESS, errorDetails: undefined, images, primaryImageId: images[0]?.id } } : node)),
                     );
                     setDialogNodeId(null);
+                    if (ratioMismatch) message.warning(t("canvas.projectPage.ratioMismatch", { requested: ratioMismatch.requested, actual: ratioMismatch.actual }));
                 } catch (error) {
                     if (!isGenerationCanceled(error)) {
                         const errorDetails = error instanceof Error ? error.message : t("canvas.projectPage.generationFailed");
@@ -2426,12 +2468,14 @@ function VsStudioPage() {
                             : [];
                     const referenceImages = [...new Map([...sourceReference, ...generationContext.referenceImages].map((image) => [image.id, image])).values()];
                     const generationType = referenceImages.length ? ("edit" as const) : ("generation" as const);
-                    const generationMetadata = buildImageGenerationMetadata(generationType, generationConfig, count, referenceImages);
+                    // OpenAI-compatible MJ usually returns its four-image set from one request; do not submit one paid job per requested canvas slot.
+                    const isMidjourneyGeneration = isOpenAIMidjourneyConfig(generationConfig);
+                    const imageIds = Array.from({ length: isMidjourneyGeneration ? 1 : count }, () => nanoid());
+                    const generationMetadata = buildImageGenerationMetadata(generationType, generationConfig, imageIds.length, referenceImages);
                     const parentConfig = NODE_DEFAULT_SIZE[isConfigNode ? CanvasNodeType.Config : isImageNode ? CanvasNodeType.Image : CanvasNodeType.Text];
                     const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
                     const parentPosition = sourceNode?.position || { x: 0, y: 0 };
                     const rootId = reuseImageNode ? nodeId : nanoid();
-                    const imageIds = Array.from({ length: count }, () => nanoid());
                     pendingChildIds = [rootId];
                     const rootNode: CanvasNodeData = {
                         id: rootId,
@@ -2495,6 +2539,8 @@ function VsStudioPage() {
                     let hasSuccess = false;
                     let hasFailure = false;
                     let firstError = "";
+                    // 上游忽略尺寸参数时（带参考图的编辑请求最常见）记录下来，生成结束后明确提示用户。
+                    const ratioMismatches: Array<NonNullable<ReturnType<typeof mismatchMediaRatio>>> = [];
                     // 每个槽位发一次请求；上游一次返回多张时（如 MJ 一次返回 4 张），
                     // 把多余的图片写入新槽位，实现「上游给几张就显示几张」。
                     const extraImages: CanvasNodeImage[] = [];
@@ -2507,6 +2553,8 @@ function VsStudioPage() {
                                 const image = items[0];
                                 if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
                                 const uploaded = await uploadImage(image.dataUrl, { signal: controller.signal });
+                                const mismatch = mismatchMediaRatio(generationConfig.size, uploaded.width, uploaded.height);
+                                if (mismatch) ratioMismatches.push(mismatch);
                                 const imageSize = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
                                 const item: CanvasNodeImage = { id: imageId, status: NODE_STATUS_SUCCESS, content: uploaded.url, storageKey: uploaded.storageKey, naturalWidth: uploaded.width, naturalHeight: uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType };
                                 setNodes((prev) =>
@@ -2561,13 +2609,15 @@ function VsStudioPage() {
                     }
                     if (hasFailure) {
                         message.error(hasSuccess ? t("canvas.projectPage.partialFailed") : firstError || t("canvas.projectPage.generationFailed"));
+                    } else if (ratioMismatches.length) {
+                        message.warning(t("canvas.projectPage.ratioMismatch", { requested: ratioMismatches[0].requested, actual: ratioMismatches[0].actual }));
                     }
                     setNodes((prev) =>
                         prev.map((node) =>
                             node.id === nodeId && isConfigNode
-                                ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : t("canvas.projectPage.generationFailed") } }
+                                ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : firstError || t("canvas.projectPage.generationFailed") } }
                                 : node.id === rootId
-                                  ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : t("canvas.projectPage.allFailed") } }
+                                  ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : firstError || t("canvas.projectPage.allFailed") } }
                                     : node,
                         ),
                     );
@@ -2938,6 +2988,8 @@ function VsStudioPage() {
                         };
                     }),
                 );
+                const retryMismatch = mismatchMediaRatio(generationConfig.size, uploadedImage.width, uploadedImage.height);
+                if (retryMismatch) message.warning(t("canvas.projectPage.ratioMismatch", { requested: retryMismatch.requested, actual: retryMismatch.actual }));
             } catch (error) {
                 if (isGenerationCanceled(error)) return;
                 const errorDetails = error instanceof Error ? error.message : t("canvas.projectPage.generationFailed");
@@ -3272,6 +3324,17 @@ function VsStudioPage() {
                         {connectingParams ? <ActiveConnectionPath node={nodeById.get(connectingParams.nodeId)} handle={connectingParams} mouseWorld={mouseWorld} target={connectionTargetNodeId ? nodeById.get(connectionTargetNodeId) : undefined} /> : null}
                     </svg>
 
+                    {alignGuides.vertical.length || alignGuides.horizontal.length ? (
+                        <svg className="pointer-events-none absolute z-[90] overflow-visible" style={{ left: viewBounds.left, top: viewBounds.top, width: viewBounds.right - viewBounds.left, height: viewBounds.bottom - viewBounds.top }}>
+                            {alignGuides.vertical.map((x) => (
+                                <line key={`v-${x}`} x1={x - viewBounds.left} y1={0} x2={x - viewBounds.left} y2={viewBounds.bottom - viewBounds.top} stroke={theme.canvas.alignGuide} strokeWidth={1 / viewport.k} />
+                            ))}
+                            {alignGuides.horizontal.map((y) => (
+                                <line key={`h-${y}`} x1={0} y1={y - viewBounds.top} x2={viewBounds.right - viewBounds.left} y2={y - viewBounds.top} stroke={theme.canvas.alignGuide} strokeWidth={1 / viewport.k} />
+                            ))}
+                        </svg>
+                    ) : null}
+
                     {visibleNodes.map((node) => (
                         <CanvasNode
                             key={node.id}
@@ -3403,6 +3466,8 @@ function VsStudioPage() {
                         canUngroup={canUngroupSelection}
                         onGroup={groupSelection}
                         onUngroup={ungroupSelection}
+                        onArrangeGrid={() => arrangeSelection("grid")}
+                        onArrangeFlow={() => arrangeSelection("flow")}
                     />
                 ) : null}
 
@@ -3443,6 +3508,9 @@ function VsStudioPage() {
                         canCaptureVideoFrame={contextMenuNode?.type === CanvasNodeType.Video && Boolean(contextMenuNode.metadata?.content)}
                         canGroup={contextMenu.type === "node" && canGroupSelection}
                         canUngroup={contextMenu.type === "node" && canUngroupSelection}
+                        canArrange={contextMenu.type === "node" && selectedNodeIds.size > 1}
+                        onArrangeGrid={() => arrangeSelection("grid")}
+                        onArrangeFlow={() => arrangeSelection("flow")}
                         onClose={() => setContextMenu(null)}
                         onCaptureVideoFrame={(position) => {
                             if (contextMenu.type !== "node") return;

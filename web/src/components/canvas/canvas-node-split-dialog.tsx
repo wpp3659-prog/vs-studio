@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Button, InputNumber, Modal, Tooltip } from "antd";
+import { Button, InputNumber, Modal, Switch, Tooltip } from "antd";
 import { Grid2x2, ListRestart, PanelTop, Redo2, Rows3, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -7,7 +7,10 @@ import { readImageMeta } from "@/lib/image-utils";
 import type { ImageSplitParams } from "@/lib/canvas/canvas-image-data";
 import { useImageEditorViewport } from "@/components/canvas/use-image-editor-viewport";
 
-export type CanvasImageSplitParams = ImageSplitParams;
+export type CanvasImageSplitParams = ImageSplitParams & {
+    // 按分镜组排列:切片按镜头顺序横向铺开并自动编号,供分镜序列使用
+    storyboard?: boolean;
+};
 
 const defaultParams: CanvasImageSplitParams = { rows: 2, columns: 2, horizontalLines: [0.5], verticalLines: [0.5] };
 const maxGridSize = 12;
@@ -18,6 +21,7 @@ export function CanvasNodeSplitDialog({ dataUrl, open, onClose, onConfirm }: { d
     const [params, setParams] = useState(defaultParams);
     const [image, setImage] = useState<{ width: number; height: number } | null>(null);
     const [active, setActive] = useState<ActiveLine>(null);
+    const [storyboard, setStoryboard] = useState(false);
     const historyRef = useRef<CanvasImageSplitParams[]>([]);
     const redoRef = useRef<CanvasImageSplitParams[]>([]);
     const dragAbortRef = useRef<AbortController | null>(null);
@@ -36,6 +40,7 @@ export function CanvasNodeSplitDialog({ dataUrl, open, onClose, onConfirm }: { d
         if (!open) return;
         setParams(defaultParams);
         setActive(null);
+        setStoryboard(false);
         setImage(null);
         historyRef.current = [];
         redoRef.current = [];
@@ -219,7 +224,13 @@ export function CanvasNodeSplitDialog({ dataUrl, open, onClose, onConfirm }: { d
                                 <span className="font-semibold">{pieceSize ? `${pieceSize.width} x ${pieceSize.height}` : t("canvas.editors.unknown")}</span>
                             </div>
                         </div>
-                        <Button type="primary" size="large" className="w-full" icon={<Grid2x2 className="size-4" />} onClick={() => onConfirm(confirmParams)}>
+                        <div className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm">
+                            <Tooltip title={t("canvas.editors.asStoryboardHint")}>
+                                <span className="cursor-help opacity-80">{t("canvas.editors.asStoryboard")}</span>
+                            </Tooltip>
+                            <Switch size="small" checked={storyboard} onChange={setStoryboard} />
+                        </div>
+                        <Button type="primary" size="large" className="w-full" icon={<Grid2x2 className="size-4" />} onClick={() => onConfirm({ ...confirmParams, storyboard })}>
                             {t("canvas.editors.generateChildren")}
                         </Button>
                     </div>
