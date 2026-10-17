@@ -384,6 +384,14 @@
             "description": "24 项可勾选的影视/TVC 交付复核清单，含叙事品牌、画面连续性、声音、字幕合规与文件导出",
             "icon": "✅",
             "entry": "delivery-qc.js"
+        },
+        {
+            "id": "comfyui-workflow",
+            "name": "ComfyUI 工作流",
+            "version": "1.0.0",
+            "description": "把本机 ComfyUI 的 API 工作流接进画布:选提示词节点、运行、结果直接落到画布,支持上游图片作输入",
+            "icon": "🛠",
+            "entry": "comfyui-workflow.js"
         }
     ]
 }
