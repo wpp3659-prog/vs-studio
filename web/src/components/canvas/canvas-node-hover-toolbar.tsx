@@ -8,8 +8,9 @@ import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { CanvasNodeType, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
 import type { CanvasNodeToolbarItem } from "@/types/canvas-plugin";
+import { CanvasNodeLineage } from "./canvas-node-lineage";
 import { ImageToolSettingsModal, type ImageToolbarSettingsTool } from "./canvas-image-toolbar-settings-modal";
 import { IMAGE_QUICK_TOOLS_STORAGE_KEY, buildImageToolbarTools, defaultImageQuickToolIds, readImageQuickToolsConfig, type ImageQuickToolId } from "./canvas-image-toolbar-tools";
 
@@ -220,10 +221,24 @@ export function CanvasNodeHoverToolbar({
     );
 }
 
-export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeData | null; open: boolean; onClose: () => void }) {
+export function CanvasNodeInfoModal({
+    node,
+    nodes = [],
+    connections = [],
+    onSelectNode,
+    open,
+    onClose,
+}: {
+    node: CanvasNodeData | null;
+    nodes?: CanvasNodeData[];
+    connections?: CanvasConnection[];
+    onSelectNode?: (id: string) => void;
+    open: boolean;
+    onClose: () => void;
+}) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const { t } = useTranslation();
-    const [view, setView] = useState<"info" | "json">("info");
+    const [view, setView] = useState<"info" | "json" | "lineage">("info");
     const imageBytes = node?.type === CanvasNodeType.Image && node.metadata?.content ? getDataUrlByteSize(node.metadata.content) : 0;
     const batchCount = node?.type === CanvasNodeType.Image ? node.metadata?.images?.length || 0 : 0;
     const json = useMemo(() => {
@@ -253,6 +268,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                 onChange={(value) => setView(value as "info" | "json")}
                 options={[
                     { label: t("canvas.nodeToolbar.info"), value: "info" },
+                    { label: t("canvas.nodeToolbar.lineage"), value: "lineage" },
                     { label: "JSON", value: "json" },
                 ]}
             />
@@ -280,6 +296,10 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                                     {node.metadata.errorDetails}
                                 </div>
                             ) : null}
+                        </div>
+                    ) : view === "lineage" ? (
+                        <div className="h-full">
+                            <CanvasNodeLineage node={node} nodes={nodes} connections={connections} onSelectNode={onSelectNode || (() => undefined)} />
                         </div>
                     ) : (
                         <pre className="thin-scrollbar h-full overflow-auto rounded-lg border p-3 text-xs leading-5" style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}>

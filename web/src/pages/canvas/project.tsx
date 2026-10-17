@@ -3901,7 +3901,17 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
 
                 <input ref={imageInputRef} type="file" multiple accept="image/*,video/*,audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav" className="hidden" onChange={handleImageInputChange} />
 
-                <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} />
+                <CanvasNodeInfoModal
+                    node={infoNode}
+                    nodes={nodes}
+                    connections={connections}
+                    onSelectNode={(id) => {
+                        setInfoNodeId(id);
+                        setSelectedNodeIds(new Set([id]));
+                    }}
+                    open={Boolean(infoNode)}
+                    onClose={() => setInfoNodeId(null)}
+                />
                 <CanvasPluginManagerModal open={pluginManagerOpen} onClose={() => setPluginManagerOpen(false)} />
                 <CanvasTemplateModal
                     open={templateModalOpen}
