@@ -419,7 +419,13 @@ function VsStudioPage() {
     const resumeImageNodeTask = useCallback(
         async (node: CanvasNodeData) => {
             const taskId = node.metadata?.imageTaskId;
+            // 没有图片槽位就没地方填结果（旧格式节点），直接按失败处理，不能续查成功后写成「成功但没图」。
+            const slotId = node.metadata?.images?.[0]?.id;
             if (!taskId || generationRequestsRef.current.has(node.id)) return;
+            if (!slotId) {
+                setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: t("canvas.projectPage.generationFailed"), imageTaskId: undefined } } : item)));
+                return;
+            }
             const generationConfig = {
                 ...buildGenerationConfig(effectiveConfig, node, "image"),
                 model: node.metadata?.model || effectiveConfig.imageModel || effectiveConfig.model,
@@ -438,14 +444,13 @@ function VsStudioPage() {
                 setNodes((prev) =>
                     prev.map((item) => {
                         if (item.id !== node.id) return item;
-                        const imageId = item.metadata?.images?.[0]?.id || "";
-                        const images = item.metadata?.images?.map((slot) => (slot.id === imageId ? { ...slot, status: NODE_STATUS_SUCCESS, content: uploaded.url, storageKey: uploaded.storageKey, naturalWidth: uploaded.width, naturalHeight: uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType } : slot));
+                        const images = item.metadata?.images?.map((slot) => (slot.id === slotId ? { ...slot, status: NODE_STATUS_SUCCESS, content: uploaded.url, storageKey: uploaded.storageKey, naturalWidth: uploaded.width, naturalHeight: uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType } : slot));
                         const center = { x: item.position.x + item.width / 2, y: item.position.y + item.height / 2 };
                         return {
                             ...item,
                             position: { x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2 },
                             ...imageSize,
-                            metadata: { ...item.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, imageTaskId: undefined, images, primaryImageId: imageId || item.metadata?.primaryImageId },
+                            metadata: { ...item.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, imageTaskId: undefined, images, primaryImageId: slotId },
                         };
                     }),
                 );
