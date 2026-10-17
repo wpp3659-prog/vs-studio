@@ -277,6 +277,17 @@ export default {
             empty: "画布上没有可导出的镜头。先生成或上传图片、视频再导出。",
             readme: "这是 VS studio 导出的剪映草稿「{{title}}」。\n\n用法：把解压出来的「{{title}}」整个文件夹拷到剪映的草稿目录里（剪映 → 全局设置 → 草稿位置，通常是电脑版「文档/JianyingPro/User Data/Projects/com.lveditor.draft」），再打开剪映，草稿列表里就会出现它。\n\n说明：图片默认每张 3 秒、视频按实际时长，音频单独放在音轨。转场、字幕、调色这些请在剪映里继续做。",
         },
+        delivery: {
+            menu: "导出成片交付包",
+            menuTitle: "镜头表 + 素材 + 配音稿 + 字幕，打包成一个 zip，可直接交给后期或客户",
+            defaultTitle: "成片交付",
+            fileSuffix: "交付包",
+            done: "交付包已导出（镜头表、素材、配音稿、字幕都在里面）。",
+            empty: "画布上没有可交付的镜头。先生成或上传图片、视频再导出。",
+            missingVoiceover: "有 {{count}} 个镜头写了台词但还没有配音，交付前记得补上（配音稿已放在 voiceover.txt）。",
+            csvHeader: "序号,镜头名,起点,终点,类型,素材文件,台词,提示词",
+            readme: "这是 VS studio 导出的成片交付包「{{title}}」。\n\n共 {{count}} 个镜头，成片时长 {{duration}}，画面 {{resolution}} @ {{fps}}fps；音轨素材 {{audioCount}} 个，其中 {{voiceCount}} 个镜头写了台词。\n\n目录说明：\n- materials/   镜头素材，文件名与 shots.csv 的「素材文件」列一一对应\n- shots.csv    镜头表（Excel 可直接打开，含序号、起止时间、台词、提示词）\n- shots.json   同一份镜头表的结构化版本，给程序处理用\n- voiceover.txt 配音稿（按镜头顺序，可直接交给配音或 TTS）\n- subtitles.srt 字幕文件（导入剪映/达芬奇/PR 即可）\n\n注意：图片镜头在交付包里是静态图，成片时每张按 3 秒算；如果要带转场的成片，请用「导出剪映草稿」在剪映里完成。",
+        },
         createMenu: {
             fromNode: "引用该节点生成", close: "关闭", text: "文本生成", textDescription: "脚本、广告词、品牌文案", image: "图片生成", video: "视频生成", audio: "音频参考", config: "配置节点", configDescription: "模型、尺寸、数量和输入顺序", select: "选择节点",
         },

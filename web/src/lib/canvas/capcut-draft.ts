@@ -48,7 +48,7 @@ export type CapCutTimeline = {
     duration: number;
 };
 
-type ExportableNode = Pick<CanvasNodeData, "id" | "type" | "title" | "position" | "width" | "height" | "metadata">;
+export type ExportableNode = Pick<CanvasNodeData, "id" | "type" | "title" | "position" | "width" | "height" | "metadata">;
 
 /**
  * 把画布节点整理成一条时间线。

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Clapperboard, Download, Home, Images, Menu, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, Download, Home, Images, Menu, Package, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
 import { Dropdown, Tooltip } from "antd";
 import { useTranslation } from "react-i18next";
 
@@ -24,6 +24,7 @@ export function CanvasTopBar({
     onDeleteProject,
     onExportProject,
     onExportCapCut,
+    onExportDelivery,
     onImportImage,
     onOpenPlugins,
     onUndo,
@@ -46,6 +47,7 @@ export function CanvasTopBar({
     onDeleteProject: () => void;
     onExportProject: () => void;
     onExportCapCut: () => void;
+    onExportDelivery: () => void;
     onImportImage: () => void;
     onOpenPlugins: () => void;
     onUndo: () => void;
@@ -97,6 +99,7 @@ export function CanvasTopBar({
                                 { key: "import", icon: <Upload className="size-4" />, label: t("canvas.importAsset"), onClick: onImportImage },
                                 { key: "export", icon: <Download className="size-4" />, label: t("canvas.exportCurrent"), onClick: onExportProject },
                                 { key: "capcut", icon: <Clapperboard className="size-4" />, label: t("canvas.capcut.menu"), title: t("canvas.capcut.menuTitle"), onClick: onExportCapCut },
+                                { key: "delivery", icon: <Package className="size-4" />, label: t("canvas.delivery.menu"), title: t("canvas.delivery.menuTitle"), onClick: onExportDelivery },
                                 { type: "divider" },
                                 { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text={t("canvas.undo")} shortcut="⌘ Z" />, onClick: onUndo },
                                 { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text={t("canvas.redo")} shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },

@@ -277,6 +277,17 @@ export default {
             empty: "There are no exportable shots on this canvas. Generate or upload images or videos first.",
             readme: "This is the CapCut draft \"{{title}}\" exported from VS studio.\n\nTo use it, copy the extracted \"{{title}}\" folder into CapCut's draft directory (CapCut → Settings → Draft location; on desktop this is usually Documents/JianyingPro/User Data/Projects/com.lveditor.draft), then open CapCut — the draft appears in your list.\n\nNotes: images last 3 seconds each, videos keep their real length, and audio goes on its own audio track. Transitions, captions and color grading are best finished inside CapCut.",
         },
+        delivery: {
+            menu: "Export delivery package",
+            menuTitle: "Shot list + media + voice-over script + subtitles, zipped into one handoff package",
+            defaultTitle: "Delivery",
+            fileSuffix: "Delivery",
+            done: "Delivery package exported (shot list, media, voice-over script and subtitles included).",
+            empty: "There are no deliverable shots on this canvas. Generate or upload images or videos first.",
+            missingVoiceover: "{{count}} shots have a line but no voice-over yet. Remember to record it before delivery (the script is in voiceover.txt).",
+            csvHeader: "No,Shot,Start,End,Kind,File,Script,Prompt",
+            readme: "This is the delivery package \"{{title}}\" exported from VS studio.\n\n{{count}} shots, running time {{duration}}, frame {{resolution}} @ {{fps}}fps; {{audioCount}} audio assets, and {{voiceCount}} shots have a line written.\n\nContents:\n- materials/    shot media, filenames match the File column in shots.csv\n- shots.csv    shot list (opens in Excel; index, in/out time, line, prompt)\n- shots.json   same shot list in structured form, for tooling\n- voiceover.txt voice-over script in shot order, ready for a narrator or TTS\n- subtitles.srt subtitles, importable into CapCut/DaVinci/Premiere\n\nNote: stills are delivered as images and counted at 3 seconds each. For a cut with transitions, use \"Export CapCut draft\" and finish it inside CapCut.",
+        },
         createMenu: {
             fromNode: "Generate from this node", close: "Close", text: "Generate text", textDescription: "Scripts, ad copy, and brand content", image: "Generate image", video: "Generate video", audio: "Audio reference", config: "Configuration node", configDescription: "Model, size, count, and input order", select: "Select a node",
         },

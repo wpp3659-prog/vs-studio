@@ -5,6 +5,7 @@ import { createZip } from "@/lib/zip";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { buildCapCutTimeline, buildDraftContent, buildDraftMetaInfo, orderTimelineNodes } from "@/lib/canvas/capcut-draft";
+import { buildDeliveryPackage, buildDeliveryReadme, buildShotsCsv, buildShotsJson, buildSrt, buildVoiceoverScript } from "@/lib/canvas/delivery-package";
 import type { CanvasExportAsset, CanvasExportFile } from "@/types/canvas-export";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
@@ -104,6 +105,67 @@ export async function exportCapCutDraft(nodes: CanvasNodeData[], connections: Ca
     const zip = await createZip(files);
     saveAs(zip, `${title}-${i18n.t("canvas.capcut.fileSuffix")}.zip`);
 }
+/**
+ * 导出成片交付包：镜头表 + 素材 + 配音稿 + 字幕，打成 zip 直接发给甲方/后期。
+ * 与剪映草稿的区别：交付包是「给人看和交接」的，剪映草稿是「给软件打开」的，两者都提供。
+ */
+export async function exportDeliveryPackage(nodes: CanvasNodeData[], connections: CanvasConnection[] = [], fileName = i18n.t("canvas.delivery.defaultTitle")) {
+    const title = safeFileName(fileName) || i18n.t("canvas.delivery.defaultTitle");
+    const pkg = buildDeliveryPackage(nodes, connections, { title });
+    if (!pkg.shots.length) throw new Error(i18n.t("canvas.delivery.empty"));
+
+    const files: { name: string; data: BlobPart }[] = [];
+    // 素材文件名来自镜头表里的 fileName，两处必须一一对应，所以直接用 pkg 里的名字取节点。
+    const byNodeId = new Map(nodes.map((node) => [node.id, node]));
+    await Promise.all(
+        pkg.shots.map(async (shot) => {
+            const node = byNodeId.get(shot.nodeId);
+            const storageKey = node?.metadata?.storageKey || "";
+            if (!storageKey) return;
+            const blob = storageKey.startsWith("image:") ? await getImageBlob(storageKey) : await getMediaBlob(storageKey);
+            if (!blob) return;
+            // 扩展名以真实字节为准，镜头表里写的是一个格式、盘上是另一个的话剪映/剪辑软件会打不开。
+            const extension = blobExtension(blob.type, shot.kind);
+            files.push({ name: `${title}/${shot.fileName.replace(/\.[^.]+$/, `.${extension}`)}`, data: blob });
+        }),
+    );
+    // 音频素材跟着镜头表一起交付，命名规则与剪映草稿一致。
+    await Promise.all(
+        pkg.audios.map(async (clip) => {
+            const node = nodes.find((item) => item.type === CanvasNodeType.Audio && item.metadata?.storageKey && clip.name === (item.title || ""));
+            const storageKey = node?.metadata?.storageKey || "";
+            if (!storageKey) return;
+            const blob = await getMediaBlob(storageKey);
+            if (!blob) return;
+            files.push({ name: `${title}/${clip.fileName.replace(/\.[^.]+$/, `.${blobExtension(blob.type, "audio")}`)}`, data: blob });
+        }),
+    );
+
+    files.push({ name: `${title}/shots.csv`, data: buildShotsCsv(pkg) });
+    files.push({ name: `${title}/shots.json`, data: buildShotsJson(pkg) });
+    files.push({ name: `${title}/README.txt`, data: buildDeliveryReadme(pkg) });
+    const voiceover = buildVoiceoverScript(pkg);
+    if (voiceover) files.push({ name: `${title}/voiceover.txt`, data: voiceover });
+    const srt = buildSrt(pkg);
+    if (srt) files.push({ name: `${title}/subtitles.srt`, data: srt });
+
+    const zip = await createZip(files);
+    saveAs(zip, `${title}-${i18n.t("canvas.delivery.fileSuffix")}.zip`);
+    return pkg;
+}
+
+function blobExtension(mimeType: string, kind: "image" | "video" | "audio") {
+    if (mimeType.includes("jpeg")) return "jpg";
+    if (mimeType.includes("png")) return "png";
+    if (mimeType.includes("webp")) return "webp";
+    if (mimeType.includes("mp4")) return "mp4";
+    if (mimeType.includes("webm")) return "webm";
+    if (mimeType.includes("wav")) return "wav";
+    if (mimeType.includes("mpeg") || mimeType.includes("mp3")) return "mp3";
+    if (mimeType.includes("ogg")) return "ogg";
+    return kind === "image" ? "png" : kind === "video" ? "mp4" : "mp3";
+}
+
 function collectStorageKeys(value: unknown, keys = new Set<string>()) {
     if (!value || typeof value !== "object") return [...keys];
     if ("storageKey" in value && typeof value.storageKey === "string" && value.storageKey.includes(":")) keys.add(value.storageKey);
