@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Clapperboard, Download, Home, Images, LayoutTemplate, Menu, Package, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, Download, Home, Images, LayoutTemplate, Menu, Package, PanelLeftClose, PanelLeftOpen, Play, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
 import { Dropdown, Tooltip } from "antd";
 import { useTranslation } from "react-i18next";
 
@@ -25,6 +25,7 @@ export function CanvasTopBar({
     onExportProject,
     onExportCapCut,
     onExportDelivery,
+    onPreview,
     onImportImage,
     onOpenPlugins,
     onOpenTemplates,
@@ -49,6 +50,7 @@ export function CanvasTopBar({
     onExportProject: () => void;
     onExportCapCut: () => void;
     onExportDelivery: () => void;
+    onPreview: () => void;
     onImportImage: () => void;
     onOpenPlugins: () => void;
     onOpenTemplates: () => void;
@@ -100,6 +102,7 @@ export function CanvasTopBar({
                                 { type: "divider" },
                                 { key: "import", icon: <Upload className="size-4" />, label: t("canvas.importAsset"), onClick: onImportImage },
                                 { key: "export", icon: <Download className="size-4" />, label: t("canvas.exportCurrent"), onClick: onExportProject },
+                                { key: "preview", icon: <Play className="size-4" />, label: t("canvas.preview.menu"), title: t("canvas.preview.menuTitle"), onClick: onPreview },
                                 { key: "capcut", icon: <Clapperboard className="size-4" />, label: t("canvas.capcut.menu"), title: t("canvas.capcut.menuTitle"), onClick: onExportCapCut },
                                 { key: "delivery", icon: <Package className="size-4" />, label: t("canvas.delivery.menu"), title: t("canvas.delivery.menuTitle"), onClick: onExportDelivery },
                                 { key: "templates", icon: <LayoutTemplate className="size-4" />, label: t("canvas.template.openMenu"), onClick: onOpenTemplates },

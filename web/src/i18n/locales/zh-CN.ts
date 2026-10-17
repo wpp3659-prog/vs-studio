@@ -281,6 +281,14 @@ export default {
             delete: "删除",
             deleteTitle: "删除这个模板？",
         },
+        preview: {
+            title: "成片预览",
+            menu: "预览成片",
+            menuTitle: "按镜头顺序把画布上的图片和视频连起来播一遍，先确认节奏再导出",
+            empty: "画布上还没有出好的图片或视频，先生成几张再来预览。",
+            loading: "正在准备素材…",
+            shot: "第 {{index}} 镜",
+        },
         capcut: {
             menu: "导出剪映草稿",
             menuTitle: "把画布上的镜头按顺序排成时间线，导出成可直接打开的剪映草稿",

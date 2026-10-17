@@ -281,6 +281,14 @@ export default {
             delete: "Delete",
             deleteTitle: "Delete this template?",
         },
+        preview: {
+            title: "Preview sequence",
+            menu: "Preview sequence",
+            menuTitle: "Play the canvas images and videos in shot order to check pacing before exporting",
+            empty: "No finished images or videos on the canvas yet.",
+            loading: "Preparing media…",
+            shot: "Shot {{index}}",
+        },
         capcut: {
             menu: "Export CapCut draft",
             menuTitle: "Lay the canvas shots out in order and export a CapCut draft you can open directly",

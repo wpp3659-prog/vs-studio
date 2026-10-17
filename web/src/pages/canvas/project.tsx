@@ -83,6 +83,7 @@ import { mismatchMediaRatio } from "@/lib/media-size";
 import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
 import { CanvasPluginManagerModal } from "@/components/canvas/canvas-plugin-manager-modal";
 import { CanvasTemplateModal } from "@/components/canvas/canvas-template-modal";
+import { CanvasPreviewPlayer } from "@/components/canvas/canvas-preview-player";
 import { CanvasRefreshShell } from "@/components/canvas/canvas-refresh-shell";
 import { CanvasTopBar } from "@/components/canvas/canvas-top-bar";
 import { ConnectionCreateMenu, NodeCreateMenu, type PendingConnectionCreate } from "@/components/canvas/canvas-create-menus";
@@ -280,6 +281,7 @@ function VsStudioPage() {
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
     const [templateModalOpen, setTemplateModalOpen] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
     const [maskEditNodeId, setMaskEditNodeId] = useState<string | null>(null);
     const [splitNodeId, setSplitNodeId] = useState<string | null>(null);
@@ -3630,6 +3632,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                     onExportProject={exportCurrentProject}
                     onExportCapCut={exportCapCut}
                     onExportDelivery={exportDelivery}
+                    onPreview={() => setPreviewOpen(true)}
                     onImportImage={() => handleUploadRequest()}
                     onOpenPlugins={() => setPluginManagerOpen(true)}
                     onOpenTemplates={() => setTemplateModalOpen(true)}
@@ -3908,6 +3911,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                     onSave={saveTemplate}
                     onInsert={insertTemplate}
                 />
+                <CanvasPreviewPlayer open={previewOpen} nodes={nodes} connections={connections} onClose={() => setPreviewOpen(false)} />
 
                 {cropNode?.metadata?.content ? <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open={Boolean(cropNode)} onClose={() => setCropNodeId(null)} onConfirm={(crop) => void cropImageNode(cropNode!, crop)} /> : null}
 
