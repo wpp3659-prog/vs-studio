@@ -129,7 +129,26 @@ export function hasResumableVideoTask(node: CanvasNodeData) {
 
 /** 异步生图任务还没查完，刷新页面后要继续轮询，不能当「已中断」处理。 */
 export function hasResumableImageTask(node: CanvasNodeData) {
-    return node.type === CanvasNodeType.Image && Boolean(node.metadata?.imageTaskId) && node.metadata?.status === "loading";
+    // 只有真的还在等的槽位才算可续查。已经有图的槽位不能再查一遍，否则会把一张图变成多张、多扣一次钱。
+    return node.type === CanvasNodeType.Image && Boolean(node.metadata?.imageTaskId) && Boolean(node.metadata?.images?.some((image) => image.status === "loading"));
+}
+
+export function withVideoTaskId(taskId: string) {
+    return (node: CanvasNodeData): CanvasNodeData => ({ ...node, metadata: { ...node.metadata, videoTaskId: taskId } });
+}
+
+/**
+ * 上游是不是一个可以被重新接上的异步任务。
+ * 有任务号就只查不重发；没有任务号只能报「已中断」，由用户自己决定要不要重试。
+ */
+export function isGenerationAutoResumePaused(error: unknown) {
+    return error instanceof Error && error.name === "GenerationAutoResumePaused";
+}
+
+export function pauseGenerationAutoResume(message: string) {
+    const error = new Error(message);
+    error.name = "GenerationAutoResumePaused";
+    return error;
 }
 
 /**
@@ -164,6 +183,13 @@ function isSavingImages(node: CanvasNodeData) {
 
 export function isGenerationCanceled(error: unknown) {
     return error instanceof Error && (error.message === i18n.t("common.requestCanceled") || error.name === "AbortError");
+}
+
+/**
+ * 用户主动点了停止。页面刷新造成的 abort 不算停止，否则「刷新后自动接上」会被自己判成已停。
+ */
+export function isGenerationStopped(error: unknown) {
+    return error instanceof Error && error.message === i18n.t("common.requestCanceled");
 }
 
 export function findRetrySourceNode(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {

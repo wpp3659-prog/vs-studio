@@ -35,6 +35,8 @@ export type CanvasNodeImage = {
     naturalHeight: number;
     bytes: number;
     mimeType: string;
+    /** 这一格对应的异步任务号，刷新后据此把结果填回原槽位；出图或失败后清掉。 */
+    batchItemId?: string;
 };
 
 export type CanvasNodeText = {

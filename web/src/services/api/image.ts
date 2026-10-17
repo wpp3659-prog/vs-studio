@@ -9,6 +9,8 @@ import { buildImageReferencePromptText, type SubjectReferenceHint } from "@/lib/
 import { imageToDataUrl } from "@/services/image-storage";
 import { imageSizePresets, inferMediaScale } from "@/lib/media-size";
 import { buildMidjourneyRequest, isUnsupportedMidjourneySize } from "@/lib/midjourney-request";
+import { createMediaJob, waitMediaJob } from "./media-jobs";
+import { registerMediaJobTask } from "./media-job-runtime";
 import type { ReferenceImage } from "@/types/image";
 
 const apiText = (key: string, options?: Record<string, unknown>) => i18n.t(`apiErrors.${key}`, options);
@@ -96,7 +98,18 @@ type GeminiPayload = {
     promptFeedback?: { blockReason?: string };
 };
 type GeminiStreamState = { buffer: string; text: string; toolCalls: ResponseToolCall[]; error?: string };
-type RequestOptions = { signal?: AbortSignal; subjects?: SubjectReferenceHint[]; onTaskCreated?: (taskId: string) => void };
+type RequestOptions = {
+    signal?: AbortSignal;
+    subjects?: SubjectReferenceHint[];
+    onTaskCreated?: (taskId: string) => void;
+    /**
+     * 交给本地 Agent 执行时的回调。
+     * started=false 表示这次没走 Agent（Agent 没启动或不支持），界面不该显示这张图正在跑。
+     */
+    onAgentJob?: (started: boolean) => void;
+    /** 结果要写回哪个画布/节点/槽位；不传就不做刷新重连。 */
+    jobTarget?: { projectId: string; nodeId: string; imageId?: string };
+};
 
 const IMAGE_QUALITY_VALUES = ["low", "medium", "high", "xhigh", "max"];
 const DEFAULT_IMAGE_SHORT_SIDE = 1024;
@@ -566,6 +579,56 @@ function aiApiUrl(config: AiConfig, path: string) {
     return buildApiUrl(config.baseUrl, path);
 }
 
+/**
+ * 把一次生图请求交给本地 Agent 执行。
+ * 返回任务号表示这次已经在服务端跑起来了，并且已登记到本地，刷新页面后能重连；
+ * 返回空表示 Agent 不可用，由调用方回退成浏览器直连。
+ */
+async function submitAgentImageJob(
+    config: AiConfig,
+    kind: "image" | "imageEdit",
+    path: string,
+    body: unknown,
+    title: string,
+    options?: RequestOptions,
+) {
+    let jobId = "";
+    try {
+        const job = await createMediaJob({ kind, baseUrl: config.baseUrl, apiKey: config.apiKey, path, model: config.model, body, title, timeoutMs: IMAGE_REQUEST_TIMEOUT_MS });
+        jobId = job?.id || "";
+    } catch {
+        jobId = "";
+    }
+    options?.onAgentJob?.(Boolean(jobId));
+    if (!jobId) return "";
+    // 登记任务号：刷新页面后靠它重连，重连只查询、不重发，不会重复扣费。
+    const target = options?.jobTarget;
+    if (target) registerMediaJobTask({ jobId, projectId: target.projectId, nodeId: target.nodeId, imageId: target.imageId, kind: "image" });
+    return jobId;
+}
+
+/** 表单请求转成 JSON：文件字段按 data URL 传，和上游编辑接口收到的内容等价。 */
+async function formDataToJson(formData: FormData) {
+    const body: Record<string, unknown> = {};
+    for (const [key, value] of formData.entries()) {
+        if (typeof value === "string") {
+            body[key] = value;
+            continue;
+        }
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(new Error("参考图读取失败"));
+            reader.readAsDataURL(value);
+        });
+        // image[] 这类多图字段要按数组传，否则服务端只能收到最后一张。
+        const existing = body[key];
+        if (key.endsWith("[]")) body[key] = Array.isArray(existing) ? [...existing, dataUrl] : [dataUrl];
+        else body[key] = dataUrl;
+    }
+    return body;
+}
+
 function aiHeaders(config: AiConfig, contentType?: string) {
     return {
         Authorization: `Bearer ${config.apiKey}`,
@@ -980,32 +1043,32 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     const midjourneyRequest = isMidjourney ? buildMidjourneyRequest(requestConfig.size, config.quality, n, prompt) : undefined;
     const requestSize = isMidjourney ? undefined : resolveRequestSize(config.size);
     const background = normalizeBackground(config.background);
+    const body = isMidjourney
+        ? {
+              model: requestConfig.model,
+              prompt: withSystemPrompt(requestConfig, midjourneyRequest?.prompt ?? prompt),
+              ...(midjourneyRequest?.params || {}),
+          }
+        : {
+              model: requestConfig.model,
+              prompt: withSystemPrompt(requestConfig, prompt),
+              n,
+              ...(quality ? { quality } : {}),
+              ...(requestSize ? { size: requestSize } : {}),
+              ...(background ? { background } : {}),
+              // gpt-image models reject response_format; they always return b64.
+              ...(/gpt-image/.test(requestConfig.model) ? {} : { response_format: "b64_json" }),
+              output_format: IMAGE_OUTPUT_FORMAT,
+          };
+    // 交给本地常驻服务去调上游：页面刷新/关标签都不会掐断这次请求（浏览器直连会被掐断）。
+    const jobId = await submitAgentImageJob(requestConfig, "image", "/images/generations", body, `生成图片 · ${requestConfig.model}`, options);
+    if (jobId) return (await waitMediaJob(jobId, { signal: options?.signal })).map((dataUrl) => ({ id: nanoid(), dataUrl }));
     try {
-        const response = await axios.post<ImageApiResponse>(
-            aiApiUrl(requestConfig, "/images/generations"),
-            isMidjourney
-                ? {
-                      model: requestConfig.model,
-                      prompt: withSystemPrompt(requestConfig, midjourneyRequest?.prompt ?? prompt),
-                      ...(midjourneyRequest?.params || {}),
-                  }
-                : {
-                      model: requestConfig.model,
-                      prompt: withSystemPrompt(requestConfig, prompt),
-                      n,
-                      ...(quality ? { quality } : {}),
-                      ...(requestSize ? { size: requestSize } : {}),
-                      ...(background ? { background } : {}),
-                      // gpt-image models reject response_format; they always return b64.
-                      ...(/gpt-image/.test(requestConfig.model) ? {} : { response_format: "b64_json" }),
-                      output_format: IMAGE_OUTPUT_FORMAT,
-                  },
-            {
-                headers: { ...aiHeaders(requestConfig, "application/json"), Prefer: IMAGE_ASYNC_PREFERENCE },
-                signal: options?.signal,
-                timeout: IMAGE_REQUEST_TIMEOUT_MS,
-            },
-        );
+        const response = await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/generations"), body, {
+            headers: { ...aiHeaders(requestConfig, "application/json"), Prefer: IMAGE_ASYNC_PREFERENCE },
+            signal: options?.signal,
+            timeout: IMAGE_REQUEST_TIMEOUT_MS,
+        });
         const asyncTaskId = readAsyncTaskId(response);
         if (asyncTaskId) {
             // 任务号先交给调用方存进节点，页面刷新后才能继续查这个任务。
@@ -1086,6 +1149,11 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     const files = await Promise.all(references.map(async (image) => dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) })));
     const imageField = files.length > 1 ? "image[]" : "image";
     files.forEach((file) => formData.append(imageField, file));
+
+    // 带参考图的编辑请求同样交给本地 Agent：参考图转成 data URL 一起送过去。
+    const editBody = await formDataToJson(formData);
+    const jobId = await submitAgentImageJob(requestConfig, "imageEdit", "/images/edits", editBody, `编辑图片 · ${requestConfig.model}`, options);
+    if (jobId) return (await waitMediaJob(jobId, { signal: options?.signal })).map((dataUrl) => ({ id: nanoid(), dataUrl }));
 
     try {
         const response = await axios.post<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, {

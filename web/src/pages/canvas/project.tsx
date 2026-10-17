@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 
 import { isOpenAIMidjourneyConfig, requestEdit, requestGeneration, requestImageQuestion, resumeImageTask } from "@/services/api/image";
+import { getMediaJobTasks } from "@/services/api/media-job-runtime";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { createVideoGenerationTask, isVideoTaskFailed, storeGeneratedVideo, waitForVideoGenerationTask } from "@/services/api/video";
 import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -44,7 +45,7 @@ import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/a
 import { CanvasSidePanel } from "@/components/canvas/canvas-side-panel";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { useAgentStore } from "@/stores/use-agent-store";
-import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { flushCanvasPersist, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useAgentBridge } from "@/pages/canvas/hooks/use-agent-bridge";
 import { usePluginHost } from "@/pages/canvas/hooks/use-plugin-host";
 import { buildNodeMentionReferences, getGroupResourceNodes, isCanvasReferenceNode, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -53,6 +54,7 @@ import { countMissingVoiceover } from "@/lib/canvas/delivery-package";
 import { applyNodeConfigPatch, audioMetadata, buildAudioGenerationMetadata, buildImageGenerationMetadata, createCanvasNode, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-node-factory";
 import { applyGroupSelection, applyUngroupSelection, canGroupSelectedNodes, canUngroupSelectedNodes, collectGroupMemberNodes, findContainingGroupId, findGroupDropTarget, focusViewportForNode, getConnectionTargetAnchor, getGroupWrapRect, normalizeConnection, snapNodesIntoGroup } from "@/lib/canvas/canvas-node-geometry";
 import { ALIGN_SNAP_THRESHOLD_PX, EMPTY_ALIGN_GUIDES, arrangeNodesByFlow, arrangeNodesInGrid, chainSelectedNodes, computeAlignmentSnap, type AlignmentGuides } from "@/lib/canvas/canvas-node-align";
+import { buildCanvasTemplate, instantiateCanvasTemplate, templateInsertOrigin, type CanvasTemplate } from "@/lib/canvas/canvas-templates";
 import {
     audioExtension,
     buildAngleLabel,
@@ -63,20 +65,24 @@ import {
     getGenerationCount,
     getInputSummary,
     hasResumableVideoTask,
-    hasResumableImageTask,
     hydrateAssistantImages,
     hydrateCanvasImages,
     imageExtension,
     isAudioFile,
+    isGenerationAutoResumePaused,
     isGenerationCanceled,
+    isGenerationStopped,
+    pauseGenerationAutoResume,
     resetInterruptedGeneration,
     resolveMetadataReferences,
     sourceNodeReferenceImages,
+    withVideoTaskId,
 } from "@/lib/canvas/canvas-generation-helpers";
 import { getNodeDefinition, isBuiltinNodeType as isBuiltinType, useNodeRegistryVersion } from "@/lib/canvas/node-registry";
 import { mismatchMediaRatio } from "@/lib/media-size";
 import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
 import { CanvasPluginManagerModal } from "@/components/canvas/canvas-plugin-manager-modal";
+import { CanvasTemplateModal } from "@/components/canvas/canvas-template-modal";
 import { CanvasRefreshShell } from "@/components/canvas/canvas-refresh-shell";
 import { CanvasTopBar } from "@/components/canvas/canvas-top-bar";
 import { ConnectionCreateMenu, NodeCreateMenu, type PendingConnectionCreate } from "@/components/canvas/canvas-create-menus";
@@ -273,6 +279,7 @@ function VsStudioPage() {
     const [dialogNodeId, setDialogNodeId] = useState<string | null>(null);
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
+    const [templateModalOpen, setTemplateModalOpen] = useState(false);
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
     const [maskEditNodeId, setMaskEditNodeId] = useState<string | null>(null);
     const [splitNodeId, setSplitNodeId] = useState<string | null>(null);
@@ -338,9 +345,11 @@ function VsStudioPage() {
     }, []);
 
     const completeVideoNodeTask = useCallback(
-        async (nodeId: string, config: Parameters<typeof buildGenerationConfig>[0], prompt: string, images: Parameters<typeof createVideoGenerationTask>[2], signal: AbortSignal, extra: CanvasNodeData["metadata"] = {}, videos: ReferenceVideo[] = [], audios: ReferenceAudio[] = []) => {
+        async (nodeId: string, config: Parameters<typeof buildGenerationConfig>[0], prompt: string, images: Parameters<typeof createVideoGenerationTask>[2], signal: AbortSignal, extra: CanvasNodeData["metadata"] = {}, videos: ReferenceVideo[] = [], audios: ReferenceAudio[] = [], onTaskCreated?: (taskId: string) => void) => {
             const task = await createVideoGenerationTask(config, prompt, images, { signal, videos, audios });
             if (task.provider !== "plugin") {
+                // 任务号先落到节点上，页面刷新后还能接着查这个任务，不用重新生成（重发等于再扣一次费）。
+                onTaskCreated?.(task.id);
                 setNodes((prev) => prev.map((item) => (item.id === nodeId ? { ...item, metadata: { ...item.metadata, videoTaskId: task.id, videoTaskProvider: task.provider === "gemini" ? "gemini" : "openai", model: config.model } } : item)));
             }
             const video = await storeGeneratedVideo(await waitForVideoGenerationTask(config, task, { signal }));
@@ -415,17 +424,22 @@ function VsStudioPage() {
         [effectiveConfig, finishGenerationRequest, isAiConfigReady, message, openConfigDialog, startGenerationRequest, t],
     );
 
-    // 刷新页面后续查异步生图任务：请求时任务号已存进节点 metadata，这里恢复轮询并把结果填回唯一的图片槽位。
+    // 刷新页面后续查异步生图任务：请求时任务号已存进节点 metadata，这里恢复轮询并把结果填回对应槽位。
+    // batchItemId 留在槽位上，一批多张时也能对上是哪张。
+    const hasResumableImageTask = (node: CanvasNodeData) => Boolean(node.metadata?.imageTaskId) && (node.metadata?.status === NODE_STATUS_LOADING || node.metadata?.images?.some((image) => image.status === NODE_STATUS_LOADING));
+
     const resumeImageNodeTask = useCallback(
         async (node: CanvasNodeData) => {
             const taskId = node.metadata?.imageTaskId;
+            const slots = node.metadata?.images || [];
+            const slot = slots.find((image) => image.batchItemId === taskId) || slots.find((image) => image.status === NODE_STATUS_LOADING) || slots[0];
             // 没有图片槽位就没地方填结果（旧格式节点），直接按失败处理，不能续查成功后写成「成功但没图」。
-            const slotId = node.metadata?.images?.[0]?.id;
             if (!taskId || generationRequestsRef.current.has(node.id)) return;
-            if (!slotId) {
+            if (!slot) {
                 setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: t("canvas.projectPage.generationFailed"), imageTaskId: undefined } } : item)));
                 return;
             }
+            const slotId = slot.id;
             const generationConfig = {
                 ...buildGenerationConfig(effectiveConfig, node, "image"),
                 model: node.metadata?.model || effectiveConfig.imageModel || effectiveConfig.model,
@@ -434,7 +448,7 @@ function VsStudioPage() {
             };
             const controller = startGenerationRequest(node.id, node.id, node.id);
             try {
-                if (!isAiConfigReady(generationConfig, generationConfig.model)) throw new Error(t("workbench.configFirst"));
+                if (!isAiConfigReady(generationConfig, generationConfig.model)) throw pauseGenerationAutoResume(t("workbench.configFirst"));
                 const items = await resumeImageTask(generationConfig, taskId, { signal: controller.signal });
                 const image = items[0];
                 if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
@@ -444,22 +458,28 @@ function VsStudioPage() {
                 setNodes((prev) =>
                     prev.map((item) => {
                         if (item.id !== node.id) return item;
-                        const images = item.metadata?.images?.map((slot) => (slot.id === slotId ? { ...slot, status: NODE_STATUS_SUCCESS, content: uploaded.url, storageKey: uploaded.storageKey, naturalWidth: uploaded.width, naturalHeight: uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType } : slot));
+                        const images = item.metadata?.images?.map((current) => (current.id === slotId ? { ...current, status: NODE_STATUS_SUCCESS, content: uploaded.url, storageKey: uploaded.storageKey, naturalWidth: uploaded.width, naturalHeight: uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType, batchItemId: undefined } : current));
                         const center = { x: item.position.x + item.width / 2, y: item.position.y + item.height / 2 };
+                        // 只有主图槽位才改节点尺寸和主图，避免续查把用户已经选好的主图顶掉。
+                        const makePrimary = item.metadata?.primaryImageId === slotId || !item.metadata?.content;
                         return {
                             ...item,
-                            position: { x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2 },
-                            ...imageSize,
-                            metadata: { ...item.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, imageTaskId: undefined, images, primaryImageId: slotId },
+                            ...(makePrimary ? { position: { x: center.x - imageSize.width / 2, y: center.y - imageSize.height / 2 }, ...imageSize } : {}),
+                            metadata: { ...item.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, imageTaskId: undefined, images, primaryImageId: makePrimary ? slotId : item.metadata?.primaryImageId },
                         };
                     }),
                 );
             } catch (error) {
-                // 任务已失效（404）或续查超时就如实标错并清掉任务号，避免下次刷新再查一个查不到的任务。
                 if (isGenerationCanceled(error)) return;
+                // 渠道没配好属于配置问题，清掉任务号也没用，留着等用户配好再刷新即可。
+                if (isGenerationAutoResumePaused(error)) {
+                    setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, errorDetails: t("workbench.configFirst") } } : item)));
+                    return;
+                }
+                // 任务已失效（404）或续查超时就如实标错并清掉任务号，避免下次刷新再查一个查不到的任务。
                 const errorDetails = error instanceof Error ? error.message : t("canvas.projectPage.generationFailed");
                 message.error(errorDetails);
-                setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails, imageTaskId: undefined } } : item)));
+                setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails, imageTaskId: undefined, images: item.metadata?.images?.map((image) => (image.id === slotId ? { ...image, status: NODE_STATUS_ERROR, errorDetails, batchItemId: undefined } : image)) } } : item)));
             } finally {
                 finishGenerationRequest(node.id, controller);
             }
@@ -550,8 +570,16 @@ function VsStudioPage() {
 
     useEffect(() => {
         if (!projectLoaded) return;
-        nodesRef.current.filter(hasResumableVideoTask).forEach((node) => void pollVideoNodeTask(node, true));
-        nodesRef.current.filter(hasResumableImageTask).forEach((node) => void resumeImageNodeTask(node));
+        const nodes = nodesRef.current;
+        const resumableVideos = nodes.filter(hasResumableVideoTask);
+        const resumableImages = nodes.filter(hasResumableImageTask);
+        // 交给本地 Agent 的任务：请求还在 Agent 里跑，这里只等结果，刷新不会中断。
+        // 结果由 registerMediaJobTask 里的轮询写回节点，这里不用再发任何请求。
+        const agentNodes = new Set(getMediaJobTasks().filter((task) => task.projectId === projectId).map((task) => task.nodeId));
+        // 只按已记录的任务号免费续查。绝不自动重发请求——每重发一次上游就扣一次钱，
+        // 用户没点「重试」之前不能替他花钱。没有任务号的节点由 resetInterruptedGeneration 标成可重试的失败。
+        resumableVideos.forEach((node) => void pollVideoNodeTask(node, true));
+        resumableImages.filter((node) => !agentNodes.has(node.id)).forEach((node) => void resumeImageNodeTask(node));
         // Resume once after the current canvas is restored, not on later config identity changes.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projectLoaded]);
@@ -1005,6 +1033,32 @@ function VsStudioPage() {
         }
         setConnections(result.connections);
         message.success(t("canvas.projectPage.chainShotsDone", { added: result.added, total: result.total }));
+    }, [message, t]);
+
+    // 画布模板：把选中的一段（含内部连线）存成模板，之后可以一键铺到任意画布再改。
+    const saveTemplate = useCallback((name: string) => {
+        const template = buildCanvasTemplate({
+            name: name || currentProject?.title || "",
+            nodes: nodesRef.current,
+            connections: connectionsRef.current,
+            nodeIds: Array.from(selectedNodeIdsRef.current),
+        });
+        if (!template) {
+            message.info(t("canvas.template.noSelection"));
+            return null;
+        }
+        message.success(t("canvas.template.saved"));
+        return template;
+    }, [currentProject?.title, message, t]);
+
+    const insertTemplate = useCallback((template: CanvasTemplate) => {
+        const result = instantiateCanvasTemplate(template, templateInsertOrigin(nodesRef.current));
+        setNodes((prev) => [...prev, ...result.nodes]);
+        setConnections((prev) => [...prev, ...result.connections]);
+        setSelectedNodeIds(new Set(result.nodes.map((node) => node.id)));
+        setSelectedConnectionId(null);
+        setTemplateModalOpen(false);
+        message.success(t("canvas.template.inserted", { count: result.nodes.length }));
     }, [message, t]);
 
     const deleteConnection = useCallback((connectionId: string) => {
@@ -2789,17 +2843,26 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                     // 每个槽位发一次请求；上游一次返回多张时（如 MJ 一次返回 4 张），
                     // 把多余的图片写入新槽位，实现「上游给几张就显示几张」。
                     const extraImages: CanvasNodeImage[] = [];
-                    // 中转把请求转成异步任务时先记下任务号：页面刷新后能继续查，不用从头再生成一次。
-                    // 多槽位并发生成时任务和槽位对不上，只对单槽位（含 MJ 四图单任务）记录。
-                    const onImageTaskCreated = imageIds.length === 1
-                        ? (taskId: string) => setNodes((prev) => prev.map((node) => (node.id === rootId ? { ...node, metadata: { ...node.metadata, imageTaskId: taskId } } : node)))
-                        : undefined;
+                    // 中转把请求转成异步任务时记下任务号：刷新页面后能接着查，不用从头再生成一次（对用户等于重新扣费）。
+                    // 多张一起生成时逐个写进对应槽位，刷新后才知道哪一格在等哪个任务。
+                    // 已经被刷新打断的请求不算失败，任务号要留着，交给刷新后的续查接着办。
+                    let interrupted = false;
                     await Promise.all(
                         imageIds.map(async (imageId) => {
+                            const onTaskCreated = (taskId: string) => {
+                                setNodes((prev) =>
+                                    prev.map((node) => (node.id === rootId ? { ...node, metadata: { ...node.metadata, imageTaskId: imageIds.length === 1 ? taskId : node.metadata?.imageTaskId, images: node.metadata?.images?.map((image) => (image.id === imageId ? { ...image, batchItemId: taskId } : image)) } } : node)),
+                                );
+                                // 任务号是刷新后能不能接回来的唯一线索，写完立刻落盘，别等 400ms 的保存节流。
+                                window.setTimeout(flushCanvasPersist, 0);
+                            };
                             try {
+                                // 交给本地 Agent 的任务要记住写回哪个节点、哪个槽位，刷新后据此重连。
+                                const jobTarget = { projectId, nodeId: rootId, imageId };
                                 const items = referenceImages.length
-                                    ? await requestEdit({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, { signal: controller.signal, subjects: subjectHints, onTaskCreated: onImageTaskCreated })
-                                    : await requestGeneration({ ...generationConfig, count: "1" }, effectivePrompt, { signal: controller.signal, onTaskCreated: onImageTaskCreated });
+                                    ? await requestEdit({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages, { signal: controller.signal, subjects: subjectHints, onTaskCreated, jobTarget })
+                                    : await requestGeneration({ ...generationConfig, count: "1" }, effectivePrompt, { signal: controller.signal, onTaskCreated, jobTarget });
+                                // 结果已经由 Agent 轮询器写回画布（刷新后重连也是同一条路），这里不重复写，避免一张图变两张。
                                 const image = items[0];
                                 if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
                                 const uploaded = await uploadImage(image.dataUrl, { signal: controller.signal });
@@ -2810,7 +2873,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                                 setNodes((prev) =>
                                     prev.map((node) => {
                                         if (node.id !== rootId) return node;
-                                        const images = node.metadata?.images?.map((image) => (image.id === imageId ? item : image)) || [];
+                                        const images = node.metadata?.images?.map((image) => (image.id === imageId ? { ...item, batchItemId: undefined } : image)) || [];
                                         if (node.metadata?.primaryImageId) return { ...node, metadata: { ...node.metadata, images } };
                                         const center = { x: node.position.x + node.width / 2, y: node.position.y + node.height / 2 };
                                         return {
@@ -2841,6 +2904,11 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                                 if (isConfigNode) setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined } } : node)));
                                 return true;
                             } catch (error) {
+                                // 页面刷新打断：不算失败，槽位和任务号都留着，刷新后的续查接着办。
+                                if (error instanceof Error && error.name === "AbortError" && !isGenerationStopped(error)) {
+                                    interrupted = true;
+                                    return false;
+                                }
                                 if (isGenerationCanceled(error)) return false;
                                 const errorDetails = error instanceof Error ? error.message : t("canvas.projectPage.generationFailed");
                                 if (!firstError) firstError = errorDetails;
@@ -2858,6 +2926,8 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                         setNodes((prev) => prev.map((node) => (node.id === nodeId && isConfigNode && node.metadata?.status === NODE_STATUS_LOADING ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_IDLE, errorDetails: undefined } } : node)));
                         return;
                     }
+                    // 有请求被刷新打断时保持 loading，让节点在刷新后还能被续查认出来。
+                    if (interrupted) return;
                     if (hasFailure) {
                         message.error(hasSuccess ? t("canvas.projectPage.partialFailed") : firstError || t("canvas.projectPage.generationFailed"));
                     } else if (ratioMismatches.length) {
@@ -2868,7 +2938,16 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                             node.id === nodeId && isConfigNode
                                 ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : firstError || t("canvas.projectPage.generationFailed") } }
                                 : node.id === rootId
-                                  ? { ...node, metadata: { ...node.metadata, status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR, errorDetails: hasSuccess ? undefined : firstError || t("canvas.projectPage.allFailed"), imageTaskId: undefined } }
+                                  ? {
+                                        ...node,
+                                        metadata: {
+                                            ...node.metadata,
+                                            status: hasSuccess ? NODE_STATUS_SUCCESS : NODE_STATUS_ERROR,
+                                            errorDetails: hasSuccess ? undefined : firstError || t("canvas.projectPage.allFailed"),
+                                            // 失败的槽位如果还挂着任务号，说明是浏览器这边断的，留着让刷新后（或下次打开）接着查。
+                                            imageTaskId: node.metadata?.images?.some((image) => image.status === NODE_STATUS_ERROR && image.batchItemId) ? node.metadata?.imageTaskId : undefined,
+                                        },
+                                    }
                                     : node,
                         ),
                     );
@@ -2918,7 +2997,10 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                             watermark: generationConfig.videoWatermark,
                             videoMode: generationConfig.videoMode,
                             references: generationReferenceUrls(generationContext),
-                        }, generationContext.referenceVideos, generationContext.referenceAudios);
+                        }, generationContext.referenceVideos, generationContext.referenceAudios, (taskId) => {
+                            setNodes((prev) => prev.map((node) => (node.id === videoId ? withVideoTaskId(taskId)(node) : node)));
+                            window.setTimeout(flushCanvasPersist, 0);
+                        });
                     } finally {
                         finishGenerationRequest(videoId, controller);
                     }
@@ -3174,7 +3256,10 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                         generateAudio: generationConfig.videoGenerateAudio,
                         watermark: generationConfig.videoWatermark,
                         videoMode: generationConfig.videoMode,
-                    }, context?.referenceVideos || [], context?.referenceAudios || []);
+                    }, context?.referenceVideos || [], context?.referenceAudios || [], (taskId) => {
+                        setNodes((prev) => prev.map((item) => (item.id === node.id ? withVideoTaskId(taskId)(item) : item)));
+                        window.setTimeout(flushCanvasPersist, 0);
+                    });
                     return;
                 }
                 if (node.type === CanvasNodeType.Audio) {
@@ -3183,10 +3268,15 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                     return;
                 }
 
-                const onRetryTaskCreated = (taskId: string) => setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, imageTaskId: taskId } } : item)));
+                const onRetryTaskCreated = (taskId: string) => {
+                    setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, imageTaskId: taskId } } : item)));
+                    window.setTimeout(flushCanvasPersist, 0);
+                };
+                // 交给本地 Agent 的任务要记住写回哪个节点、哪个槽位，刷新后据此重连。
+                const jobTarget = { projectId, nodeId: node.id, imageId };
                 const items = useReferenceImages
-                    ? await requestEdit(generationConfig, prompt, retryImages, { signal: controller.signal, subjects: collectSubjectHints(retryImages, connectionsRef.current, nodesRef.current), onTaskCreated: onRetryTaskCreated })
-                    : await requestGeneration(generationConfig, prompt, { signal: controller.signal, onTaskCreated: onRetryTaskCreated });
+                    ? await requestEdit(generationConfig, prompt, retryImages, { signal: controller.signal, subjects: collectSubjectHints(retryImages, connectionsRef.current, nodesRef.current), onTaskCreated: onRetryTaskCreated, jobTarget })
+                    : await requestGeneration(generationConfig, prompt, { signal: controller.signal, onTaskCreated: onRetryTaskCreated, jobTarget });
                 const image = items[0];
                 if (!image) throw new Error(t("canvas.projectPage.generationFailed"));
                 const uploadedImage = await uploadImage(image.dataUrl, { signal: controller.signal });
@@ -3542,6 +3632,7 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
                     onExportDelivery={exportDelivery}
                     onImportImage={() => handleUploadRequest()}
                     onOpenPlugins={() => setPluginManagerOpen(true)}
+                    onOpenTemplates={() => setTemplateModalOpen(true)}
                     onUndo={undoCanvas}
                     onRedo={redoCanvas}
                     compactAgentStatus={{ connected: localAgentConnected, enabled: localAgentEnabled, activity: localAgentActivity }}
@@ -3809,6 +3900,14 @@ function collectSubjectHints(references: ReferenceImage[], connections: CanvasCo
 
                 <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} />
                 <CanvasPluginManagerModal open={pluginManagerOpen} onClose={() => setPluginManagerOpen(false)} />
+                <CanvasTemplateModal
+                    open={templateModalOpen}
+                    selectionCount={selectedNodeIds.size}
+                    initialName={currentProject?.title || ""}
+                    onClose={() => setTemplateModalOpen(false)}
+                    onSave={saveTemplate}
+                    onInsert={insertTemplate}
+                />
 
                 {cropNode?.metadata?.content ? <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open={Boolean(cropNode)} onClose={() => setCropNodeId(null)} onConfirm={(crop) => void cropImageNode(cropNode!, crop)} /> : null}
 

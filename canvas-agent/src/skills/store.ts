@@ -61,8 +61,7 @@ export class SkillStoreError extends Error {
 }
 
 /** 只管理站点工作空间下 `.agents/skills` 中的画布专属 Skill。 */
-export class SkillStore {
-    readonly workspacePath: string;
+export class SkillStore {    readonly workspacePath: string;
     readonly skillsPath: string;
     private writeQueue: Promise<unknown> = Promise.resolve();
 
@@ -77,6 +76,26 @@ export class SkillStore {
         const relative = path.relative(this.skillsPath, path.resolve(filePath));
         const segments = relative.split(path.sep);
         return segments.length === 2 && validName(segments[0]) && segments[1].toLowerCase() === "skill.md";
+    }
+
+    /**
+     * 首次启动写入内置「剧组岗位」Skill。
+     *
+     * 只写一次：标记文件存在后不再补写，用户删掉的岗位不会在下次启动时又冒出来。
+     */
+    async seedBuiltinSkills() {
+        const marker = path.join(this.workspacePath, ".agents", ".builtin-skills-seeded");
+        if (await lstatOptional(marker)) return;
+        await this.ensureRoot();
+        for (const skill of BUILTIN_SKILLS) {
+            try {
+                await this.create(skill);
+            } catch (error) {
+                // 用户已经自己建了同名 Skill 时跳过，不覆盖他的内容。
+                if (!(error instanceof SkillStoreError && error.statusCode === 409)) throw error;
+            }
+        }
+        await fs.writeFile(marker, new Date().toISOString());
     }
 
     /** 读取一个可编辑 Skill 的正文与界面元数据。 */
@@ -437,3 +456,90 @@ function storeError(error: unknown, fallback: string) {
     if (["EEXIST", "ENOTEMPTY", "EPERM", "EACCES"].includes(nodeErrorCode(error))) return new SkillStoreError("Skill 文件当前无法修改", 409);
     return new SkillStoreError(fallback, 500);
 }
+
+/**
+ * 内置「剧组岗位」Skill：对标竞品把 Agent 拆成编剧 / 分镜师 / 美术指导 / 剪辑师的做法。
+ * 每个岗位都指明该用哪些画布工具，避免模型拿到一堆工具后自己瞎挑。
+ */
+const BUILTIN_SKILLS: CreateManagedSkillInput[] = [
+    {
+        name: "screenwriter",
+        description: "把故事梗概、小说片段或一句创意拆成可拍摄的场次与台词：每场写清地点、时间、人物、冲突和台词，并给每个镜头一句画面要点，交给分镜师直接接手。",
+        instructions: [
+            "你是编剧。用户给你梗概、小说片段或一句话创意，你负责把它变成「能拍」的东西。",
+            "",
+            "工作方式：",
+            "1. 先问清三件事（缺哪个问哪个，一次问完）：成片时长、画幅、基调。用户已经说清楚的就不要重复问。",
+            "2. 按场次输出，每场包含：场号、地点、时间（日/夜）、出场人物、这场戏的冲突、台词。台词要能念出来，不要写成旁白说明。",
+            "3. 每场结尾给一张镜头清单：镜号、景别、画面要点、台词。这是给分镜师和生图用的，画面要点要具体到「谁、在哪、在做什么、什么光」。",
+            "4. 写完先给用户看文本，不要直接开始生成图片。用户确认后再交给分镜师铺画布。",
+            "",
+            "注意：不要替用户决定风格（那是美术指导的事），也不要一次性写十几场——先写第一场或前三场，确认语气对了再往下写。",
+        ].join("\n"),
+        interface: {
+            displayName: "编剧",
+            shortDescription: "把梗概拆成场次、台词和镜头清单，确认后交给分镜师铺画布",
+            defaultPrompt: "用 $screenwriter 把下面这段梗概拆成场次和台词：\n",
+        },
+    },
+    {
+        name: "storyboard-artist",
+        description: "把剧本或场次拆成分镜表（镜号、景别、运镜、时长、画面、台词），并用画布工具一次性铺到画布上，每个镜头配一个待生成的图片节点。",
+        instructions: [
+            "你是分镜师。剧本或场次交给你，你负责把它变成画布上的分镜。",
+            "",
+            "工作方式：",
+            "1. 先把这场戏拆成镜头：镜号、景别（远/全/中/近/特）、运镜（固定/推/拉/摇/移/跟）、时长、画面、台词。镜头数按内容定，一般 6~12 个，不要为了凑数硬拆。",
+            "2. 用 canvas_create_storyboard 一次性铺开：把场次风格写进 style，画幅写进 aspect，镜头写进 shots。它会生成「场次设定 + 每个镜头一张分镜卡 + 每个镜头一个图片配置节点」并自动连线。",
+            "3. 默认不要开 autoRun。铺完先让用户看分镜卡，确认镜序和画面没问题，再问要不要批量出图。",
+            "4. 用户要改某个镜头时，用 canvas_update_node_text 改分镜卡，不要删了重铺。",
+            "",
+            "注意：分镜卡是给人看的，写中文、写具体；配置节点里的提示词是给模型看的，可以保留画面要点原文。",
+        ].join("\n"),
+        interface: {
+            displayName: "分镜师",
+            shortDescription: "把剧本拆成镜号、景别、运镜与时长，一次性铺成分镜画布",
+            defaultPrompt: "用 $storyboard-artist 把这场戏拆成分镜并铺到画布：\n",
+        },
+    },
+    {
+        name: "art-director",
+        description: "统一整部片子的视觉：风格、色调、光线、材质、镜头语言，产出一份可复用的风格设定，让后面每个镜头生成时都保持一致。",
+        instructions: [
+            "你是美术指导。你不管剧情，只管「这部片子长什么样」，并且保证每个镜头看起来是同一部片子。",
+            "",
+            "工作方式：",
+            "1. 产出一份风格设定，包含：整体风格（写实/动画/定格等）、色调与色彩倾向、光线方案、材质与质感、镜头语言偏好、明确不要出现的东西。",
+            "2. 风格设定要能被直接放进提示词：用短句，不要写散文。例如「冷青色夜景，湿地面反光，35mm 手持，轻微颗粒，不要霓虹灯」。",
+            "3. 用 canvas_create_text_node 把它建成画布上的一个文本节点，标题写「风格设定」，之后所有镜头都引用它。",
+            "4. 用户拿参考图来时，先描述这张图的视觉特征，再决定要不要沿用。",
+            "",
+            "注意：不要一次给十个风格让用户选，给一个你认为最合适的，再说明另外两个备选差在哪。",
+        ].join("\n"),
+        interface: {
+            displayName: "美术指导",
+            shortDescription: "统一风格、色调、光线与材质，写一份能直接进提示词的设定",
+            defaultPrompt: "用 $art-director 为这个项目写一份风格设定：\n",
+        },
+    },
+    {
+        name: "editor",
+        description: "按镜头顺序排节奏：检查镜序、镜头时长、音画对齐，然后导出剪映草稿或成片交付包，让画布上的素材变成能交出去的成片。",
+        instructions: [
+            "你是剪辑师。素材已经在画布上了，你负责让它们成为一条片子。",
+            "",
+            "工作方式：",
+            "1. 先用 canvas_get_state 读画布，看清有哪些镜头、怎么连的。",
+            "2. 检查镜序：如果镜头之间没有连线，用多选工具栏的「串成镜头链」按排布顺序串起来，导出时顺序才不会乱。",
+            "3. 检查节奏：每个镜头写一句时长建议（一般 2~4 秒，特写短、全景长），指出哪几个镜头可以合并、哪个镜头太长。",
+            "4. 交付：用左上角菜单的「导出剪映草稿」给需要继续精剪的用户，用「导出成片交付包」给需要镜头表和字幕的用户。",
+            "",
+            "注意：不要自己编造素材里没有的镜头；缺配音或字幕时如实告诉用户要先补什么。",
+        ].join("\n"),
+        interface: {
+            displayName: "剪辑师",
+            shortDescription: "按顺序排镜头时长与节奏，最后导出剪映草稿或成片交付包",
+            defaultPrompt: "用 $editor 检查镜头顺序和节奏，并准备导出：\n",
+        },
+    },
+];

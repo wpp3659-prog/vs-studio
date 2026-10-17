@@ -85,6 +85,28 @@ export function inferMediaRatio(size: string, fallback = "1:1") {
         }, fallback);
 }
 
+/** Return the canonical ratio label shown in image settings, or empty when the user chose Auto. */
+export function resolveMediaAspectRatio(size: string) {
+    const ratio = inferMediaRatio(size);
+    return ratio === "auto" ? "" : ratio;
+}
+
+/**
+ * 比较「请求的尺寸」和「实际返回的图片尺寸」。
+ * 明显不一致时返回双方识别出的比例，供上层提示用户：说明模型或中转忽略了尺寸参数，
+ * 而不是画布悄悄显示了一张比例不对的图。
+ */
+export function mismatchMediaRatio(size: string, width: number, height: number) {
+    if (!size || size === "auto" || !width || !height) return null;
+    const target = parsePixelSize(size) || parseAspectRatio(size);
+    if (!target) return null;
+    const requested = target.width / target.height;
+    const actual = width / height;
+    // 容差 10%：足以识别「横图变竖图」这类明显偏差，又不会因为取整误差误报。
+    if (Math.abs(actual - requested) / requested <= 0.1) return null;
+    return { requested: inferMediaRatio(size), actual: inferMediaRatio(`${width}x${height}`), width, height };
+}
+
 export function computeMediaSize(scale: string, ratio: string) {
     if (ratio === "auto" || !ratio) return "auto";
     const normalizedScale = normalizeMediaScale(scale);

@@ -10,6 +10,9 @@ import { messageMetadataStore } from "../agent/message-metadata.js";
 import type { AgentAttachment, AgentPermissionMode } from "../agent/types.js";
 import { AGENT_PROTOCOL_VERSION, CanvasSession } from "../canvas/session.js";
 import { DEFAULT_PORT, ensureSiteWorkspace, loadConfig, saveConfig, updateSiteWorkspace, type CanvasAgentConfig } from "../config.js";
+import { CONFIG_DIR } from "../config.js";
+import { cancelMediaJob, getMediaJob, initMediaJobs, listMediaJobs, readMediaJobResult, startMediaJob } from "../media/jobs.js";
+import { requestUpstreamImage } from "../media/upstream.js";
 import { logger } from "../utils/logger.js";
 import { checkVersions } from "../version-check.js";
 import { SkillStore, SkillStoreError } from "../skills/store.js";
@@ -25,10 +28,14 @@ export function startHttpServer() {
     saveConfig(config);
 
     const initialWorkspace = ensureSiteWorkspace(config);
+    // 生成任务结果与任务表放在配置目录下，服务重启后仍能按任务号取回。
+    void initMediaJobs(path.join(CONFIG_DIR, "media-jobs"));
     // 启动时按上次保存的画布渠道预写隔离配置，服务重启后无需前端再次推送即可生效。
     applyAgentChannel(config.agentChannel || null);
     const session = new CanvasSession(initialWorkspace.activeThreadId || "");
     const skillStore = new SkillStore(initialWorkspace.workspacePath);
+    // 首次启动写入内置「剧组岗位」Skill（编剧 / 分镜师 / 美术指导 / 剪辑师）；失败不影响启动。
+    void skillStore.seedBuiltinSkills().catch(() => undefined);
     /** 将 Agent 事件广播到所属线程或全部网页。 */
     const emit = (type: string, payload: unknown) => {
         const value = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : { value: payload };
@@ -163,6 +170,41 @@ export function startHttpServer() {
     app.post("/canvas/result", (req, res) => {
         const ok = session.resolveResult(String(req.query.clientId || ""), req.body);
         res.status(ok ? 200 : 409).json({ ok });
+    });
+    /**
+     * 媒体生成任务：真正调上游的是这里，不是网页。
+     * 网页刷新/关标签都不会中断它，回来用任务号取结果即可。
+     */
+    app.post("/media/jobs", route(async (req, res) => {
+        const body = req.body || {};
+        const baseUrl = String(body.baseUrl || "").trim();
+        const apiKey = String(body.apiKey || "").trim();
+        const apiPath = String(body.path || "").trim();
+        if (!baseUrl || !apiPath) return void res.status(400).json({ ok: false, error: "缺少接口地址" });
+        const job = startMediaJob(
+            { kind: body.kind === "imageEdit" ? "imageEdit" : "image", baseUrl, model: String(body.model || ""), title: String(body.title || "") || undefined },
+            (signal) => requestUpstreamImage({ baseUrl, apiKey, path: apiPath, body: body.body, timeoutMs: Number(body.timeoutMs) || undefined }, signal),
+        );
+        res.json({ ok: true, job });
+    }));
+    app.get("/media/jobs", (_req, res) => res.json({ ok: true, jobs: listMediaJobs() }));
+    app.get("/media/jobs/:jobId", (req, res) => {
+        const job = getMediaJob(routeParam(req.params.jobId));
+        if (!job) return void res.status(404).json({ ok: false, error: "任务不存在" });
+        res.json({ ok: true, job });
+    });
+    /** 结果按任务号直接回二进制，页面拿到就是图，不用再单独下载。 */
+    app.get("/media/jobs/:jobId/result", route(async (req, res) => {
+        const job = getMediaJob(routeParam(req.params.jobId));
+        if (!job) return void res.status(404).json({ ok: false, error: "任务不存在" });
+        if (job.status !== "done") return void res.status(409).json({ ok: false, error: job.error || "任务尚未完成" });
+        const file = await readMediaJobResult(job);
+        if (!file) return void res.status(404).json({ ok: false, error: "结果已过期" });
+        res.type(job.contentType || "image/png").send(file);
+    }));
+    app.post("/media/jobs/:jobId/cancel", (req, res) => {
+        const ok = cancelMediaJob(routeParam(req.params.jobId));
+        res.status(ok ? 200 : 404).json({ ok });
     });
     app.get("/agent/attachments/:attachmentId", route(async (req, res) => {
         const attachment = session.getTurnAttachment(String(req.query.clientId || ""), routeParam(req.params.attachmentId));

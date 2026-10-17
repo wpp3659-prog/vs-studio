@@ -715,6 +715,7 @@ function toolName(name: string) {
     if (name === "canvas_create_config_node") return "创建生成配置";
     if (name === "canvas_create_image_prompt_flow") return "创建生图流程";
     if (name === "canvas_create_generation_flow") return "创建生成流程";
+    if (name === "canvas_create_storyboard") return "铺开分镜";
     if (name === "canvas_generate_text") return "生成文本";
     if (name === "canvas_generate_image") return "生成图片";
     if (name === "canvas_generate_video") return "生成视频";

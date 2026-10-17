@@ -229,3 +229,23 @@ test("拒绝读取非对象格式的 interface 元数据", async (context) => {
 
     await assert.rejects(store.get("invalid-interface"), (error: unknown) => error instanceof SkillStoreError && error.statusCode === 409);
 });
+
+test("首次启动写入四个内置岗位 Skill，删除后不再补写", async (context) => {
+    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "canvas-skill-seed-"));
+    context.after(() => fs.rm(workspace, { recursive: true, force: true }));
+    const store = new SkillStore(workspace);
+
+    await store.seedBuiltinSkills();
+    for (const name of ["screenwriter", "storyboard-artist", "art-director", "editor"]) {
+        const detail = await store.get(name);
+        assert.equal(detail.managed, true);
+        assert.ok(detail.interface?.displayName, `${name} 缺少显示名称`);
+        assert.match(detail.interface?.defaultPrompt || "", new RegExp(`\\$${name}`));
+        assert.ok((detail.interface?.shortDescription || "").length >= 25);
+    }
+
+    // 用户删掉一个岗位后重启，不应被自动加回来。
+    await store.delete("editor", (await store.get("editor")).revision);
+    await store.seedBuiltinSkills();
+    await assert.rejects(() => store.get("editor"), (error: unknown) => error instanceof SkillStoreError && error.statusCode === 404);
+});

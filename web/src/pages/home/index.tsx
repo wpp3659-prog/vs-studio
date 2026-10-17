@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, FileText, Images, LayoutTemplate, Maximize2, Sparkles, Video } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { App, Button, Image, Tag } from "antd";
 import { useNavigate } from "react-router-dom";
@@ -8,6 +8,17 @@ import { fetchPrompts, type Prompt } from "@/services/api/prompts";
 import { navigationTools } from "@/constant/navigation-tools";
 import i18n from "@/i18n";
 import { cn } from "@/lib/utils";
+
+/** 首页创作入口：对齐竞品把「图片/视频/画布/分镜/提示词/素材」摆在一屏的做法。 */
+const HOME_ENTRIES = [
+    { key: "image", to: "/image", icon: Sparkles },
+    { key: "video", to: "/video", icon: Video },
+    { key: "canvas", to: "/canvas", icon: Maximize2 },
+    { key: "storyboard", to: "/canvas", icon: LayoutTemplate },
+    { key: "prompts", to: "/prompts", icon: FileText },
+    { key: "assets", to: "/assets", icon: Images },
+] as const;
+
 
 function Highlighter({ action, color, children }: { action: "highlight" | "underline"; color: string; children?: ReactNode }) {
     return (
@@ -57,6 +68,28 @@ export default function IndexPage() {
                         </Button>
                     </div>
                 </div>
+
+                <section className="relative mx-auto mb-16 grid max-w-6xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {HOME_ENTRIES.map((entry) => {
+                        const Icon = entry.icon;
+                        return (
+                            <button
+                                key={entry.key}
+                                type="button"
+                                onClick={() => navigate(entry.to)}
+                                className="group flex items-start gap-3 rounded-2xl border border-stone-200 bg-white/70 p-4 text-left transition hover:border-stone-300 hover:bg-white dark:border-stone-800 dark:bg-stone-900/60 dark:hover:border-stone-700 dark:hover:bg-stone-900"
+                            >
+                                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-stone-100 text-stone-700 transition group-hover:bg-stone-900 group-hover:text-white dark:bg-stone-800 dark:text-stone-200 dark:group-hover:bg-stone-100 dark:group-hover:text-stone-900">
+                                    <Icon className="size-4" />
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-medium text-stone-900 dark:text-stone-100">{t(`home.entries.${entry.key}.title`)}</span>
+                                    <span className="mt-1 block text-xs leading-5 text-stone-500 dark:text-stone-400">{t(`home.entries.${entry.key}.desc`)}</span>
+                                </span>
+                            </button>
+                        );
+                    })}
+                </section>
 
                 <section className="relative mx-auto mb-20 max-w-6xl border-t border-stone-200 pt-12 dark:border-stone-800">
                     <div className="mb-8 grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-start">

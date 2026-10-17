@@ -63,6 +63,7 @@ const OFFICIAL = [
     { id: "continuity-checker", dir: "continuity-checker", name: "连戏连续性检查", description: "检查分镜之间的轴线、视线、动作、服装、道具、场景与光线连续性，引用证据并区分风险与待确认项", icon: "🧷" },
     { id: "edit-rhythm", dir: "edit-rhythm", name: "剪辑节奏规划器", description: "按目标时长生成精确时间码剪辑节奏表：画面、转场、旁白、音乐音效与品牌落点", icon: "⏱" },
     { id: "delivery-qc", dir: "delivery-qc", name: "成片交付检查表", description: "24 项可勾选的影视/TVC 交付复核清单，含叙事品牌、画面连续性、声音、字幕合规与文件导出", icon: "✅" },
+    { id: "comfyui-workflow", dir: "comfyui-workflow", name: "ComfyUI 工作流", description: "把本机 ComfyUI 的 API 工作流接进画布:选提示词节点、运行、结果直接落到画布,支持上游图片作输入", icon: "🛠" },
 ];
 
 // 读取插件 package.json 的 version 作为清单版本的唯一来源

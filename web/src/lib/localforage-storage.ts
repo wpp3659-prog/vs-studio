@@ -18,6 +18,7 @@ const STORE_NAMES = [
     "video_generation_logs",
     "media_files",
     "prompt_cache",
+    "canvas_templates",
 ];
 
 const MIGRATION_FLAG = "vs-studio:indexeddb-migrated";

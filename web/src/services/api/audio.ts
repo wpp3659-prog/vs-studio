@@ -104,6 +104,17 @@ async function assertAudioBlob(blob: Blob) {
     if (payload.error?.message) throw new Error(payload.error.message);
 }
 
+/** 网关故障页（nginx / Cloudflare）的 <title> 或 <h1> 里通常写着状态码，例如 "<title>502 Bad Gateway</title>"。只认 5xx，避免把 403 拦截页误报成鉴权失败。 */
+function readHtmlGatewayError(value: unknown) {
+    if (typeof value !== "string") return "";
+    const matched = value.match(/(?:<title>|<h1>)\s*(5\d{2})\b/i);
+    if (!matched) return "";
+    const status = Number(matched[1]);
+    if (status === 502) return apiText("badGateway");
+    if (status === 503) return apiText("serviceBusy");
+    return apiText("httpFailed", { status });
+}
+
 function readApiErrorMessage(value: unknown): string {
     if (!value) return "";
     if (typeof value === "string") {
@@ -113,7 +124,13 @@ function readApiErrorMessage(value: unknown): string {
             if (inner === value && typeof parsed === "object" && Object.keys(parsed).length === 0) return "";
             return inner;
         } catch {
+            // 中转/网关故障时经常返回整页 HTML（nginx、Cloudflare 的 502/503/504 页面），
+            // 这种页面本身没人看得懂，先尝试把状态码读出来换成正常提示。
+            const gatewayMsg = readHtmlGatewayError(value);
+            if (gatewayMsg) return gatewayMsg;
             if (/<[a-z][\s\S]*>/i.test(value)) return apiText("htmlError", { preview: `${value.slice(0, 80)}...` });
+            // 本地代理在上游连接失败时会把 Node 的原始报错原样透传过来，这里换成可读提示。
+            if (/^fetch failed$/i.test(value.trim())) return apiText("proxyUpstreamFailed");
             return value;
         }
     }

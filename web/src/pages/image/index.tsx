@@ -11,6 +11,7 @@ import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
+import { mismatchMediaRatio } from "@/lib/media-size";
 import { modelOptionLabel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { nanoid } from "nanoid";
@@ -202,7 +203,14 @@ export default function ImagePage() {
                     images: successImages,
                 }),
             );
-            successCount ? message.success(t("imageWorkbench.generated")) : message.error(failed?.reason instanceof Error ? failed.reason.message : t("workbench.generationFailed"));
+            if (successCount) {
+                message.success(t("imageWorkbench.generated"));
+                // 上游可能忽略 size 参数，成功后核对一次实际画幅，不一致就提示用户。
+                const mismatched = successImages.map((image) => mismatchMediaRatio(snapshot.config.size, image.width, image.height)).find((item) => Boolean(item));
+                if (mismatched) message.warning(t("workbench.ratioMismatch", { requested: mismatched.requested, actual: mismatched.actual }));
+            } else {
+                message.error(failed?.reason instanceof Error ? failed.reason.message : t("workbench.generationFailed"));
+            }
         } finally {
             setRunning(false);
         }
@@ -357,6 +365,8 @@ export default function ImagePage() {
                 }),
             );
             message.success(t("workbench.retrySuccess"));
+            const mismatch = mismatchMediaRatio(snapshot.config.size, image.width, image.height);
+            if (mismatch) message.warning(t("workbench.ratioMismatch", { requested: mismatch.requested, actual: mismatch.actual }));
         } catch {
             // runGenerationSlot has already marked the result as failed.
         }

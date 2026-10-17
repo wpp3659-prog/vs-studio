@@ -5,6 +5,26 @@ description: Implemented changes that still need manual verification
 
 # Pending Tests
 
+- **Refresh no longer kills generation (needs a rebuilt Agent)**: rebuild the local Agent (`canvas-agent` → `npm run build`) and restart it with 一键启动. Generate one image with a **synchronous** model such as gpt-image-2, and while the node is still spinning refresh the page once or several times. The node must stay in its generating state, and when the upstream finishes the image must appear in the same node by itself. Checking the relay dashboard, the job count must be **exactly 1** — refreshing must never submit a new paid request. Closing the tab entirely and reopening the canvas later should also recover the finished image.
+
+- **Generation keeps running after closing the browser tab**: start a generation, then close the whole browser (or just the tab) and wait. Reopen the canvas — the image should be there. If the local Agent is also restarted in between, the node should report "服务重启，任务已中断" and let you retry, rather than hanging forever.
+
+- **Agent offline falls back to browser**: stop the local Agent, then generate an image. Generation must still work as before (the request is sent from the browser), and the node behaviour must match the old version. No red errors about the Agent.
+
+- **Reference-image editing survives refresh**: on an image node with a reference image attached, start an edit (e.g. "change the background to blue"), refresh mid-flight. The result must come back into the same node, and the relay must show one job only.
+
+- **Multi-image batch survives refresh**: generate 4 images at once, refresh mid-flight. Each finished image must land on **its own** slot (not all on the first one), and refreshing must not add extra slots.
+
+- No silent spending: generate one image with a **synchronous** model (e.g. gpt-image-2) with the local Agent **stopped**, then refresh a few times. The node must show "generation interrupted — regenerate" and **nothing must be re-sent**: no extra charge, and only one image slot. Press "Retry" yourself and exactly one image comes back.
+
+- No silent spending: generate one image with a **synchronous** model (e.g. gpt-image-2) with the local Agent **stopped**, then refresh a few times. The node must show "generation interrupted — regenerate" and **nothing must be re-sent**: no extra charge, and only one image slot. Press "Retry" yourself and exactly one image comes back.
+
+- One image stays one image: with a synchronous model, request 1 image, let it finish, then refresh. The node must keep exactly one slot and one image — never grow to multiple images after a refresh.
+
+- Repeated refresh with an async-capable relay (e.g. xinfeng): the task survives several F5s in a row, finishes in place, and the relay dashboard shows only one job.
+
+- Refresh does not lose tasks: start a multi-image batch (e.g. 4 images) and refresh mid-flight. After reopening the canvas, finished images should stay on their slots and unfinished ones keep going, filling back into their own slot instead of all landing on the first one. With a relay that supports async image tasks, no request is re-sent (no extra charge); with a relay that does not, the unfinished ones are re-sent once automatically right after refresh. Clicking "Stop" must still stop for good — a later refresh must not restart it. Interrupting video tasks should also resume by task id after refresh.
+
 - Image task resume across refresh: start generating an image through an async-capable relay (e.g. xinfeng) and refresh the page while the node is still spinning. After reopening the canvas the node should stay in its generating state, keep polling, and finish with the image in place — no "generation interrupted" message. Refresh again after completion and the image should still be there. If the task was deleted on the relay side, the node should show the real error (not "interrupted"), and regenerate recovers it.
 
 - Chain shots: split an image into 3+ frames with the 9-grid split (enable "arrange as storyboard"), select them all and click "Chain shots" in the floating toolbar. It should report "Shots chained: N shots, N-1 new connections" and draw connections in 1→2→3 order. Clicking again should say they are already chained. If one selected shot already has a downstream generation node, that segment must stay untouched.

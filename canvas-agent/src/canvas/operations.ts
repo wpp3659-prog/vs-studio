@@ -6,6 +6,9 @@ import type { CanvasNode, CanvasNodeType, CanvasSnapshot } from "./types.js";
 
 export type CanvasToolRequest = { name: "canvas_apply_ops"; input: Record<string, unknown> };
 
+/** 分镜卡与配置节点统一宽度，保证列与列之间间距一致。 */
+const CARD_WIDTH = 340;
+
 /** 将上层画布工具调用转换为前端可执行的批量操作。 */
 export function buildCanvasToolRequest(name: ToolName, input: Record<string, unknown>, state: CanvasSnapshot | null): CanvasToolRequest {
     if (name === "canvas_apply_ops") return { name, input };
@@ -34,6 +37,7 @@ export function buildCanvasToolRequest(name: ToolName, input: Record<string, unk
         return applyOps([configNodeOp(configId, input, x, y), ...(input.autoRun ? [runGenerationOp(configId, mode, prompt)] : [])]);
     }
     if (name === "canvas_create_generation_flow") return applyOps(generationFlowOps(input, state));
+    if (name === "canvas_create_storyboard") return applyOps(storyboardOps(input, state));
     if (name === "canvas_generate_text" || name === "canvas_generate_image" || name === "canvas_generate_video" || name === "canvas_generate_audio") {
         return applyOps(generationFlowOps({ ...input, mode: name.replace("canvas_generate_", ""), autoRun: true }, state));
     }
@@ -148,6 +152,43 @@ function generationFlowOps(input: Record<string, unknown>, state: CanvasSnapshot
 /** 创建触发节点生成的画布操作。 */
 function runGenerationOp(nodeId: string, mode: "text" | "image" | "video" | "audio", prompt?: string) {
     return { type: "run_generation", nodeId, mode, prompt };
+}
+
+/** 把一场戏按分镜铺成「场次设定 + 分镜卡 + 图片配置」三行结构，按列排布并自动连线。 */
+function storyboardOps(input: Record<string, unknown>, state: CanvasSnapshot | null) {
+    const shots = (Array.isArray(input.shots) ? input.shots : []).filter((shot): shot is Record<string, unknown> => Boolean(shot && typeof shot === "object"));
+    const x = Number(input.x ?? nextCanvasX(state));
+    const y = Number(input.y ?? 0);
+    const style = String(input.style || "").trim();
+    const aspect = String(input.aspect || "").trim();
+    const title = String(input.title || "场次设定");
+    const setId = `text-${crypto.randomUUID()}`;
+    const settingText = [title, style && `风格：${style}`, aspect && `画幅：${aspect}`].filter(Boolean).join("\n");
+    const ops: unknown[] = [textNodeOp({ id: setId, text: settingText, title, width: CARD_WIDTH, height: 160 }, x, y)];
+    const configIds: string[] = [];
+
+    shots.forEach((shot, index) => {
+        const no = String(shot.no || String(index + 1).padStart(2, "0"));
+        const columnX = x + index * (CARD_WIDTH + 60);
+        const cardId = `text-${crypto.randomUUID()}`;
+        const configId = `config-${crypto.randomUUID()}`;
+        const meta = [shot.shotSize, shot.cameraMove, shot.duration].filter(Boolean).map(String).join("｜");
+        const cardText = [
+            `镜头 ${no}${meta ? `｜${meta}` : ""}`,
+            `画面：${String(shot.action || "")}`,
+            shot.dialogue ? `台词：${String(shot.dialogue)}` : "",
+        ].filter(Boolean).join("\n");
+        const promptText = [`@[node:${setId}]`, `@[node:${cardId}]`, shot.prompt ? String(shot.prompt) : ""].filter(Boolean).join("\n");
+        ops.push(textNodeOp({ id: cardId, text: cardText, title: `分镜 ${no}`, width: CARD_WIDTH, height: 240 }, columnX, y + 220));
+        ops.push(configNodeOp(configId, { ...input, prompt: promptText, title: `镜头 ${no}`, size: aspect || input.size }, columnX, y + 520));
+        ops.push({ type: "connect_nodes", fromNodeId: setId, toNodeId: configId });
+        ops.push({ type: "connect_nodes", fromNodeId: cardId, toNodeId: configId });
+        if (input.autoRun) ops.push(runGenerationOp(configId, "image", promptText));
+        configIds.push(configId);
+    });
+
+    ops.push({ type: "select_nodes", ids: configIds });
+    return ops;
 }
 
 /** 将未知生成模式归一为画布支持的模式。 */

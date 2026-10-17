@@ -14,6 +14,7 @@ description: 操作 VS studio 当前网页画布，读取节点、选区、创�
 - 创建单个文本内容优先用 `canvas_create_text_node`。
 - 创建生成内容优先用 `canvas_generate_text`、`canvas_generate_image`、`canvas_generate_video`、`canvas_generate_audio`。
 - 需要把提示词、配置和生成节点串成流程时，使用 `canvas_create_generation_flow` 或项目已有的流程工具。
+- 用户给出剧本、故事梗概或多个镜头时，先拆成分镜再用 `canvas_create_storyboard` 一次性铺开：它会在画布上生成「场次设定 + 每个镜头一张分镜卡 + 每个镜头一个图片配置节点」并自动连线，比逐个建节点更省调用次数。`autoRun` 只在用户明确要马上出图时才设为 true，否则先让用户确认分镜再触发生成。
 - 需要批量增删改、移动、连接节点或设置视口时，使用 `canvas_apply_ops`。
 - 不要模拟鼠标点击，不要要求用户手动复制 JSON。
 - 写入画布的操作会由网页侧边栏做二次确认，按当前工具结果继续推进即可。
